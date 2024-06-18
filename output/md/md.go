@@ -541,7 +541,7 @@ func (m *Md) makeTableTemplateData(t *schema.Table) map[string]interface{} {
 	columnsHeader := []string{}
 	columnsHeaderLine := []string{}
 	m.adjustColumnHeader(&columnsHeader, &columnsHeaderLine, true, "Name")
-	m.adjustColumnHeader(&columnsHeader, &columnsHeaderLine, true, "LogicName")
+	m.adjustColumnHeader(&columnsHeader, &columnsHeaderLine, true, "LogicalName")
 	m.adjustColumnHeader(&columnsHeader, &columnsHeaderLine, true, "Type")
 	m.adjustColumnHeader(&columnsHeader, &columnsHeaderLine, true, "Default")
 	m.adjustColumnHeader(&columnsHeader, &columnsHeaderLine, true, "Nullable")
@@ -799,7 +799,7 @@ func (m *Md) tablesData(tables []*schema.Table, number, adjust, showOnlyFirstPar
 	data := [][]string{}
 	header := []string{
 		m.config.MergedDict.Lookup("Name"),
-		m.config.MergedDict.Lookup("LogicName"),
+		m.config.MergedDict.Lookup("LogicalName"),
 		m.config.MergedDict.Lookup("Columns"),
 		m.config.MergedDict.Lookup("Comment"),
 		m.config.MergedDict.Lookup("Type"),
