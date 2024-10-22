@@ -8,9 +8,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/k1LoW/errors"
 	"github.com/k1LoW/tbls/dict"
 	"github.com/k1LoW/tbls/schema"
-	"github.com/pkg/errors"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -95,7 +95,8 @@ func (d *Mongodb) listFields(collection *mongo.Collection) ([]*schema.Column, er
 			return columns, err
 		}
 		total += 1
-		for key, value := range result.Map() {
+		for _, entry := range result {
+			key, value := entry.Key, entry.Value
 			var valueType string
 			switch value.(type) {
 			case string:

@@ -1,5 +1,43 @@
 # Changelog
 
+## [v1.78.1](https://github.com/k1LoW/tbls/compare/v1.78.0...v1.78.1) - 2024-10-18
+### Other Changes
+- feat(postgres): Ensure ordering of index columns is always stable by @95ulisse in https://github.com/k1LoW/tbls/pull/623
+
+## [v1.78.0](https://github.com/k1LoW/tbls/compare/v1.77.0...v1.78.0) - 2024-10-08
+### Breaking Changes 🛠
+- Use github.com/k1LoW/errors by @k1LoW in https://github.com/k1LoW/tbls/pull/613
+- Add support to output enum definitions in the db doc README by @insano10 in https://github.com/k1LoW/tbls/pull/601
+### Fix bug 🐛
+- Fix CI by @k1LoW in https://github.com/k1LoW/tbls/pull/621
+### Other Changes
+- Fix using docker by @k1LoW in https://github.com/k1LoW/tbls/pull/614
+- chore(deps): bump the dependencies group across 1 directory with 8 updates by @dependabot in https://github.com/k1LoW/tbls/pull/616
+- chore(deps): bump the dependencies group with 6 updates by @dependabot in https://github.com/k1LoW/tbls/pull/618
+- chore(deps): bump the dependencies group with 8 updates by @dependabot in https://github.com/k1LoW/tbls/pull/620
+- Add existing virtual relation strategies to the README by @suzuki in https://github.com/k1LoW/tbls/pull/622
+
+## [v1.77.0](https://github.com/k1LoW/tbls/compare/v1.76.1...v1.77.0) - 2024-07-24
+### Breaking Changes 🛠
+- Refactor when expression handling by @mjpieters in https://github.com/k1LoW/tbls/pull/600
+- Hide inner table (ClickHouse) by @k1LoW in https://github.com/k1LoW/tbls/pull/610
+### New Features 🎉
+- Add support for ClickHouse by @joschi in https://github.com/k1LoW/tbls/pull/605
+### Other Changes
+- Update .goreleaser.yml by @k1LoW in https://github.com/k1LoW/tbls/pull/597
+- chore(deps): bump golang.org/x/image from 0.16.0 to 0.18.0 by @dependabot in https://github.com/k1LoW/tbls/pull/602
+- chore(deps): bump docker/build-push-action from 5 to 6 in the dependencies group by @dependabot in https://github.com/k1LoW/tbls/pull/603
+- chore(deps): bump google.golang.org/grpc from 1.64.0 to 1.64.1 by @dependabot in https://github.com/k1LoW/tbls/pull/606
+- Add ClickHouse support to README by @joschi in https://github.com/k1LoW/tbls/pull/608
+- Add ClickHouse sample by @k1LoW in https://github.com/k1LoW/tbls/pull/609
+- chore(deps): bump the dependencies group across 1 directory with 11 updates by @dependabot in https://github.com/k1LoW/tbls/pull/611
+
+## [v1.76.1](https://github.com/k1LoW/tbls/compare/v1.76.0...v1.76.1) - 2024-06-19
+### New Features 🎉
+- Postgres: Support "$user" search path by @mjpieters in https://github.com/k1LoW/tbls/pull/594
+### Other Changes
+- Address lint errors by @mjpieters in https://github.com/k1LoW/tbls/pull/595
+
 ## [v1.76.0](https://github.com/k1LoW/tbls/compare/v1.75.0...v1.76.0) - 2024-06-04
 ### Breaking Changes 🛠
 - Show table comments for related tables of View (#587) by @majimaccho in https://github.com/k1LoW/tbls/pull/590

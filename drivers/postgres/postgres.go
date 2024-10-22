@@ -7,11 +7,11 @@ import (
 	"strings"
 
 	"github.com/aquasecurity/go-version/pkg/version"
+	"github.com/k1LoW/errors"
 	"github.com/k1LoW/tbls/ddl"
 	"github.com/k1LoW/tbls/dict"
 	"github.com/k1LoW/tbls/schema"
 	"github.com/lib/pq"
-	"github.com/pkg/errors"
 )
 
 var reFK = regexp.MustCompile(`FOREIGN KEY \((.+)\) REFERENCES ([^\s\)]+)\s?\(([^\)]+)\)`)
@@ -32,7 +32,10 @@ func New(db *sql.DB) *Postgres {
 }
 
 // Analyze PostgreSQL database schema
-func (p *Postgres) Analyze(s *schema.Schema) error {
+func (p *Postgres) Analyze(s *schema.Schema) (err error) {
+	defer func() {
+		err = errors.WithStack(err)
+	}()
 	d, err := p.Info()
 	if err != nil {
 		return errors.WithStack(err)
@@ -70,7 +73,27 @@ func (p *Postgres) Analyze(s *schema.Schema) error {
 			return errors.WithStack(err)
 		}
 	}
-	s.Driver.Meta.SearchPaths = strings.Split(searchPaths, ", ")
+	splitPaths := strings.Split(searchPaths, ", ")
+	// Replace "$user" with the current username
+	for idx, path := range splitPaths {
+		if path == `"$user"` {
+			var userName string
+			userNameRows, err := p.db.Query(`SELECT current_user`)
+			if err != nil {
+				return errors.WithStack(err)
+			}
+			defer userNameRows.Close()
+			for userNameRows.Next() {
+				err := userNameRows.Scan(&userName)
+				if err != nil {
+					return errors.WithStack(err)
+				}
+			}
+			splitPaths[idx] = userName
+		}
+	}
+
+	s.Driver.Meta.SearchPaths = splitPaths
 
 	fullTableNames := []string{}
 
@@ -260,7 +283,7 @@ ORDER BY tgrelid
 			case "s":
 				column.ExtraDef = fmt.Sprintf("GENERATED ALWAYS AS %s STORED", columnDefaultOrGenerated.String)
 			default:
-				return errors.Errorf("unsupported pg_attribute.attrgenerated '%s'", attrgenerated.String)
+				return fmt.Errorf("unsupported pg_attribute.attrgenerated '%s'", attrgenerated.String)
 			}
 			columns = append(columns, column)
 		}
@@ -305,6 +328,13 @@ ORDER BY tgrelid
 		return err
 	}
 	s.Functions = functions
+
+	// Enums
+	enums, err := p.getEnums()
+	if err != nil {
+		return err
+	}
+	s.Enums = enums
 
 	s.Tables = tables
 
@@ -467,6 +497,41 @@ func (p *Postgres) getFunctionsByQuery(query string) ([]*schema.Function, error)
 	return functions, nil
 }
 
+func (p *Postgres) getEnums() ([]*schema.Enum, error) {
+	enums := []*schema.Enum{}
+
+	enumsResult, err := p.db.Query(`SELECT n.nspname, t.typname AS enum_name, ARRAY_AGG(e.enumlabel) AS enum_values
+											FROM pg_type t, pg_enum e, pg_catalog.pg_namespace n
+											WHERE t.typcategory = 'E'
+											  AND t.oid = e.enumtypid
+											  AND n.oid = t.typnamespace
+											GROUP BY n.nspname, t.typname `)
+
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	defer enumsResult.Close()
+
+	for enumsResult.Next() {
+		var (
+			schemaName string
+			enumName   string
+			enumValues []string
+		)
+		err := enumsResult.Scan(&schemaName, &enumName, pq.Array(&enumValues))
+		if err != nil {
+			return enums, errors.WithStack(err)
+		}
+
+		enum := &schema.Enum{
+			Name:   fmt.Sprintf("%s.%s", schemaName, enumName),
+			Values: enumValues,
+		}
+		enums = append(enums, enum)
+	}
+	return enums, nil
+}
+
 func fullTableName(owner string, tableName string) string {
 	return fmt.Sprintf("%s.%s", owner, tableName)
 }
@@ -505,7 +570,10 @@ func (p *Postgres) EnableRsMode() {
 	p.rsMode = true
 }
 
-func (p *Postgres) queryForColumns(v string) (string, error) {
+func (p *Postgres) queryForColumns(v string) (_ string, err error) {
+	defer func() {
+		err = errors.WithStack(err)
+	}()
 	verGeneratedColumn, err := version.Parse("12")
 	if err != nil {
 		return "", err
@@ -513,7 +581,7 @@ func (p *Postgres) queryForColumns(v string) (string, error) {
 	// v => PostgreSQL 9.5.24 on x86_64-pc-linux-gnu (Debian 9.5.24-1.pgdg90+1), compiled by gcc (Debian 6.3.0-18+deb9u1) 6.3.0 20170516, 64-bit
 	matches := reVersion.FindStringSubmatch(v)
 	if matches == nil || len(matches) < 2 {
-		return "", errors.Errorf("malformed version: %s", v)
+		return "", fmt.Errorf("malformed version: %s", v)
 	}
 	vv, err := version.Parse(matches[1])
 	if err != nil {
@@ -630,7 +698,7 @@ ORDER BY idx.indexrelid`
 SELECT
   cls.relname AS indexname,
   pg_get_indexdef(idx.indexrelid) AS indexdef,
-  ARRAY_AGG(attr.attname),
+  ARRAY_AGG(attr.attname ORDER BY attr.attnum ASC),
   descr.description AS comment
 FROM pg_index AS idx
 INNER JOIN pg_class AS cls ON idx.indexrelid = cls.oid
@@ -641,7 +709,10 @@ GROUP BY cls.relname, idx.indexrelid, descr.description
 ORDER BY idx.indexrelid`
 }
 
-func detectFullTableName(name string, searchPaths, fullTableNames []string) (string, error) {
+func detectFullTableName(name string, searchPaths, fullTableNames []string) (_ string, err error) {
+	defer func() {
+		err = errors.WithStack(err)
+	}()
 	if strings.Contains(name, ".") {
 		return name, nil
 	}
@@ -649,7 +720,6 @@ func detectFullTableName(name string, searchPaths, fullTableNames []string) (str
 	for _, n := range fullTableNames {
 		if strings.HasSuffix(n, name) {
 			for _, p := range searchPaths {
-				// TODO: Support $user
 				if n == fmt.Sprintf("%s.%s", p, name) {
 					fns = append(fns, n)
 				}
@@ -657,7 +727,7 @@ func detectFullTableName(name string, searchPaths, fullTableNames []string) (str
 		}
 	}
 	if len(fns) != 1 {
-		return "", errors.Errorf("can not detect table name: %s", name)
+		return "", fmt.Errorf("can not detect table name: %s", name)
 	}
 	return fns[0], nil
 }
@@ -679,10 +749,13 @@ func convertConstraintType(t string) string {
 	}
 }
 
-func parseFK(def string) ([]string, string, []string, error) {
+func parseFK(def string) (_ []string, _ string, _ []string, err error) {
+	defer func() {
+		err = errors.WithStack(err)
+	}()
 	result := reFK.FindAllStringSubmatch(def, -1)
 	if len(result) < 1 || len(result[0]) < 4 {
-		return nil, "", nil, errors.Errorf("can not parse foreign key: %s", def)
+		return nil, "", nil, fmt.Errorf("can not parse foreign key: %s", def)
 	}
 	strColumns := []string{}
 	for _, c := range strings.Split(result[0][1], ", ") {

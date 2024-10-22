@@ -1,8 +1,7 @@
-version: '3.4'
-
 services:
   postgres95:
     image: postgres:9.5
+    platform: linux/amd64    
     restart: always
     ports:
       - "55432:5432"
@@ -21,6 +20,7 @@ services:
       - POSTGRES_DB=testdb
   mysql56:
     image: mysql:5.6
+    platform: linux/amd64
     restart: always
     ports:
       - "33306:3306"
@@ -47,7 +47,7 @@ services:
       - MYSQL_DATABASE=testdb
       - MYSQL_ROOT_PASSWORD=mypass
   mssql:
-    image: mcr.microsoft.com/mssql/server:2017-latest
+    image: mcr.microsoft.com/mssql/server:2019-latest
     restart: always
     ports:
       - "11433:1433"
@@ -70,3 +70,16 @@ services:
       - ./testdata/ddl/mongo:/docker-entrypoint-initdb.d
     ports:
       - "27017:27017"
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.4
+    restart: always
+    environment:
+      - CLICKHOUSE_DB=testdb
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+    volumes:
+      - ./testdata/ddl/clickhouse:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/?query=SELECT%201 || exit 1
+    ports:
+      - "8123:8123"
+      - "9000:9000"
