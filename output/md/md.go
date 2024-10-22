@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -545,6 +546,7 @@ func (m *Md) makeTableTemplateData(t *schema.Table) map[string]interface{} {
 	columnsHeader := []string{}
 	columnsHeaderLine := []string{}
 	m.adjustColumnHeader(&columnsHeader, &columnsHeaderLine, true, "Name")
+	m.adjustColumnHeader(&columnsHeader, &columnsHeaderLine, true, "LogicalName")
 	m.adjustColumnHeader(&columnsHeader, &columnsHeaderLine, true, "Type")
 	m.adjustColumnHeader(&columnsHeader, &columnsHeaderLine, true, "Default")
 	m.adjustColumnHeader(&columnsHeader, &columnsHeaderLine, true, "Nullable")
@@ -578,8 +580,11 @@ func (m *Md) makeTableTemplateData(t *schema.Table) map[string]interface{} {
 			pEncountered[r.ParentTable.Name] = true
 		}
 
+		logicalNameResult := extractLogicalName(c.Comment)
+
 		data := []string{
 			c.Name,
+			logicalNameResult.LogicalName,
 			c.Type,
 			c.Default.String,
 			fmt.Sprintf("%v", c.Nullable),
@@ -589,7 +594,7 @@ func (m *Md) makeTableTemplateData(t *schema.Table) map[string]interface{} {
 		adjustData(&data, t.ShowColumn(schema.ColumnPercents, hideColumns), fmt.Sprintf("%.1f", c.Percents.Float64))
 		adjustData(&data, t.ShowColumn(schema.ColumnChildren, hideColumns), strings.Join(childRelations, " "))
 		adjustData(&data, t.ShowColumn(schema.ColumnParents, hideColumns), strings.Join(parentRelations, " "))
-		adjustData(&data, t.ShowColumn(schema.ColumnComment, hideColumns), c.Comment)
+		adjustData(&data, t.ShowColumn(schema.ColumnComment, hideColumns), logicalNameResult.UpdatedComment)
 		adjustData(&data, t.ShowColumn(schema.ColumnLabels, hideColumns), output.LabelJoin(c.Labels))
 		columnsData = append(columnsData, data)
 	}
@@ -799,11 +804,12 @@ func (m *Md) tablesData(tables []*schema.Table, number, adjust, showOnlyFirstPar
 	data := [][]string{}
 	header := []string{
 		m.config.MergedDict.Lookup("Name"),
+		m.config.MergedDict.Lookup("LogicalName"),
 		m.config.MergedDict.Lookup("Columns"),
 		m.config.MergedDict.Lookup("Comment"),
 		m.config.MergedDict.Lookup("Type"),
 	}
-	headerLine := []string{"----", "-------", "-------", "----"}
+	headerLine := []string{"----", "-------", "-------", "-------", "----"}
 
 	if hasTableWithLabels {
 		header = append(header, m.config.MergedDict.Lookup("Labels"))
@@ -820,10 +826,14 @@ func (m *Md) tablesData(tables []*schema.Table, number, adjust, showOnlyFirstPar
 		if showOnlyFirstParagraph {
 			comment = output.ShowOnlyFirstParagraph(comment)
 		}
+
+		logicalNameResult := extractLogicalName(comment)
+
 		d := []string{
 			fmt.Sprintf("[%s](%s%s.md)", t.Name, m.config.BaseUrl, mdurl.Encode(t.Name)),
+			logicalNameResult.LogicalName,
 			fmt.Sprintf("%d", len(t.Columns)),
-			comment,
+			logicalNameResult.UpdatedComment,
 			t.Type,
 		}
 		if hasTableWithLabels {
@@ -1002,4 +1012,32 @@ func outputExists(s *schema.Schema, path string) bool {
 		}
 	}
 	return false
+}
+
+type LogicalNameResult struct {
+	LogicalName    string
+	UpdatedComment string
+}
+
+func extractLogicalName(comment string) LogicalNameResult {
+	// 正規表現パターンを定義（コロン、改行、スペース（全角/半角）で区切られた先頭の文字列をマッチ）
+	re := regexp.MustCompile(`^[^:\n\r\s　：]+`)
+	// コメントの中で正規表現にマッチした部分を抽出
+	logicalName := re.FindString(comment)
+	if logicalName == "" {
+		return LogicalNameResult{
+			LogicalName:    "",
+			UpdatedComment: comment,
+		}
+	}
+	// マッチした部分をコメントから削除
+	updatedComment := re.ReplaceAllString(comment, "")
+	// コメント先頭のコロン、改行、スペース（全角/半角）を取り除く
+	updatedComment = strings.TrimLeftFunc(updatedComment, func(r rune) bool {
+		return r == ':' || r == '\n' || r == '\r' || r == ' ' || r == '　' || r == '：'
+	})
+	return LogicalNameResult{
+		LogicalName:    logicalName,
+		UpdatedComment: updatedComment,
+	}
 }
