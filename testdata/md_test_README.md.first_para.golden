@@ -11,11 +11,11 @@
 
 ## Tables
 
-| Name | Columns | Comment | Type | Labels |
-| ---- | ------- | ------- | ---- | ------ |
-| [a](a.md) | 2 | TABLE A |  | `blue` `green` |
-| [b](b.md) | 2 | table b |  | `red` `green` |
-| [view](view.md) | 1 | view | VIEW |  |
+| Name | LogicalName | Columns | Comment | Type | Labels |
+| ---- | ------- | ------- | ------- | ---- | ------ |
+| [a](a.md) | TABLE | 2 | A |  | `blue` `green` |
+| [b](b.md) | table | 2 | b |  | `red` `green` |
+| [view](view.md) | view | 1 |  | VIEW |  |
 
 ## Enums
 
