@@ -18,7 +18,7 @@ var typeFk = schema.TypeFK
 var typeCheck = "CHECK"
 var reSystemNamed = regexp.MustCompile(`_[^_]+$`)
 
-// Mssql struct
+// Mssql struct.
 type Mssql struct {
 	db *sql.DB
 }
@@ -375,6 +375,7 @@ FROM sys.indexes AS i
 LEFT JOIN sys.key_constraints AS c
   ON i.object_id = c.parent_object_id AND i.index_id = c.unique_index_id
 WHERE i.object_id = object_id(@p1)
+  AND i.type <> 0
   AND EXISTS (SELECT 1 FROM sys.index_columns AS ic0 WHERE ic0.index_id = i.index_id)
 GROUP BY i.name, i.index_id, i.type_desc, i.is_unique, i.is_primary_key, i.is_unique_constraint, c.is_system_named, i.object_id
 ORDER BY i.index_id
@@ -588,24 +589,24 @@ func convertTableType(t string) string {
 func convertColumnType(t string, maxLength int) string {
 	switch t {
 	case "varchar":
-		var len string = strconv.Itoa(maxLength)
+		var length = strconv.Itoa(maxLength)
 		if maxLength == -1 {
-			len = "MAX"
+			length = "MAX"
 		}
-		return fmt.Sprintf("varchar(%s)", len)
+		return fmt.Sprintf("varchar(%s)", length)
 	case "nvarchar":
 		//nvarchar length is 2 byte, return character length
-		var len string = strconv.Itoa(maxLength / 2)
+		var length = strconv.Itoa(maxLength / 2)
 		if maxLength == -1 {
-			len = "MAX"
+			length = "MAX"
 		}
-		return fmt.Sprintf("nvarchar(%s)", len)
+		return fmt.Sprintf("nvarchar(%s)", length)
 	case "varbinary":
-		var len string = strconv.Itoa(maxLength)
+		var mlen = strconv.Itoa(maxLength)
 		if maxLength == -1 {
-			len = "MAX"
+			mlen = "MAX"
 		}
-		return fmt.Sprintf("varbinary(%s)", len)
+		return fmt.Sprintf("varbinary(%s)", mlen)
 	default:
 		return t
 	}

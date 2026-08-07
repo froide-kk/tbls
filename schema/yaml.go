@@ -4,21 +4,8 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
-// MarshalYAML return custom JSON byte
+// MarshalYAML return custom JSON byte.
 func (t Table) MarshalYAML() ([]byte, error) {
-	if len(t.Columns) == 0 {
-		t.Columns = []*Column{}
-	}
-	if len(t.Indexes) == 0 {
-		t.Indexes = []*Index{}
-	}
-	if len(t.Constraints) == 0 {
-		t.Constraints = []*Constraint{}
-	}
-	if len(t.Triggers) == 0 {
-		t.Triggers = []*Trigger{}
-	}
-
 	referencedTables := []string{}
 	for _, rt := range t.ReferencedTables {
 		referencedTables = append(referencedTables, rt.Name)
@@ -27,12 +14,12 @@ func (t Table) MarshalYAML() ([]byte, error) {
 	return yaml.Marshal(&struct {
 		Name             string        `yaml:"name"`
 		Type             string        `yaml:"type"`
-		Comment          string        `yaml:"comment"`
+		Comment          string        `yaml:"comment,omitempty"`
 		Columns          []*Column     `yaml:"columns"`
-		Indexes          []*Index      `yaml:"indexes"`
-		Constraints      []*Constraint `yaml:"constraints"`
-		Triggers         []*Trigger    `yaml:"triggers"`
-		Def              string        `yaml:"def"`
+		Indexes          []*Index      `yaml:"indexes,omitempty"`
+		Constraints      []*Constraint `yaml:"constraints,omitempty"`
+		Triggers         []*Trigger    `yaml:"triggers,omitempty"`
+		Def              string        `yaml:"def,omitempty"`
 		Labels           Labels        `yaml:"labels,omitempty"`
 		ReferencedTables []string      `yaml:"referencedTables,omitempty"`
 	}{
@@ -49,24 +36,24 @@ func (t Table) MarshalYAML() ([]byte, error) {
 	})
 }
 
-// MarshalYAML return custom YAML byte
+// MarshalYAML return custom YAML byte.
 func (c Column) MarshalYAML() ([]byte, error) {
 	if c.Default.Valid {
 		return yaml.Marshal(&struct {
 			Name            string      `yaml:"name"`
 			Type            string      `yaml:"type"`
 			Nullable        bool        `yaml:"nullable"`
-			Default         string      `yaml:"default"`
+			Default         *string     `yaml:"default,omitempty"`
 			ExtraDef        string      `yaml:"extraDef,omitempty"`
 			Labels          Labels      `yaml:"labels,omitempty"`
-			Comment         string      `yaml:"comment"`
+			Comment         string      `yaml:"comment,omitempty"`
 			ParentRelations []*Relation `yaml:"-"`
 			ChildRelations  []*Relation `yaml:"-"`
 		}{
 			Name:            c.Name,
 			Type:            c.Type,
 			Nullable:        c.Nullable,
-			Default:         c.Default.String,
+			Default:         &c.Default.String,
 			Comment:         c.Comment,
 			ExtraDef:        c.ExtraDef,
 			Labels:          c.Labels,
@@ -78,10 +65,10 @@ func (c Column) MarshalYAML() ([]byte, error) {
 		Name            string      `yaml:"name"`
 		Type            string      `yaml:"type"`
 		Nullable        bool        `yaml:"nullable"`
-		Default         *string     `yaml:"default"`
+		Default         *string     `yaml:"default,omitempty"`
 		ExtraDef        string      `yaml:"extraDef,omitempty"`
 		Labels          Labels      `yaml:"labels,omitempty"`
-		Comment         string      `yaml:"comment"`
+		Comment         string      `yaml:"comment,omitempty"`
 		ParentRelations []*Relation `yaml:"-"`
 		ChildRelations  []*Relation `yaml:"-"`
 	}{
@@ -97,7 +84,7 @@ func (c Column) MarshalYAML() ([]byte, error) {
 	})
 }
 
-// MarshalYAML return custom YAML byte
+// MarshalYAML return custom YAML byte.
 func (r Relation) MarshalYAML() ([]byte, error) {
 	columns := []string{}
 	parentColumns := []string{}
@@ -111,10 +98,10 @@ func (r Relation) MarshalYAML() ([]byte, error) {
 	return yaml.Marshal(&struct {
 		Table             string   `yaml:"table"`
 		Columns           []string `yaml:"columns"`
-		Cardinality       string   `yaml:"cardinality"`
+		Cardinality       string   `yaml:"cardinality,omitempty"`
 		ParentTable       string   `yaml:"parentTable"`
 		ParentColumns     []string `yaml:"parentColumns"`
-		ParentCardinality string   `yaml:"parentCardinality"`
+		ParentCardinality string   `yaml:"parentCardinality,omitempty"`
 		Def               string   `yaml:"def"`
 		Virtual           bool     `yaml:"virtual"`
 	}{
@@ -129,17 +116,17 @@ func (r Relation) MarshalYAML() ([]byte, error) {
 	})
 }
 
-// UnmarshalYAML unmarshal YAML to schema.Table
+// UnmarshalYAML unmarshal YAML to schema.Table.
 func (t *Table) UnmarshalYAML(data []byte) error {
 	s := struct {
 		Name             string        `yaml:"name"`
 		Type             string        `yaml:"type"`
-		Comment          string        `yaml:"comment"`
+		Comment          string        `yaml:"comment,omitempty"`
 		Columns          []*Column     `yaml:"columns"`
-		Indexes          []*Index      `yaml:"indexes"`
-		Constraints      []*Constraint `yaml:"constraints"`
-		Triggers         []*Trigger    `yaml:"triggers"`
-		Def              string        `yaml:"def"`
+		Indexes          []*Index      `yaml:"indexes,omitempty"`
+		Constraints      []*Constraint `yaml:"constraints,omitempty"`
+		Triggers         []*Trigger    `yaml:"triggers,omitempty"`
+		Def              string        `yaml:"def,omitempty"`
 		Labels           Labels        `yaml:"labels,omitempty"`
 		ReferencedTables []string      `yaml:"referencedTables,omitempty"`
 	}{}
@@ -164,14 +151,14 @@ func (t *Table) UnmarshalYAML(data []byte) error {
 	return nil
 }
 
-// UnmarshalYAML unmarshal YAML to schema.Column
+// UnmarshalYAML unmarshal YAML to schema.Column.
 func (c *Column) UnmarshalYAML(data []byte) error {
 	s := struct {
 		Name            string      `yaml:"name"`
 		Type            string      `yaml:"type"`
 		Nullable        bool        `yaml:"nullable"`
-		Default         *string     `yaml:"default"`
-		Comment         string      `yaml:"comment"`
+		Default         *string     `yaml:"default,omitempty"`
+		Comment         string      `yaml:"comment,omitempty"`
 		ExtraDef        string      `yaml:"extraDef,omitempty"`
 		Labels          Labels      `yaml:"labels,omitempty"`
 		ParentRelations []*Relation `yaml:"-"`
@@ -198,15 +185,15 @@ func (c *Column) UnmarshalYAML(data []byte) error {
 	return nil
 }
 
-// UnmarshalYAML unmarshal YAML to schema.Column
+// UnmarshalYAML unmarshal YAML to schema.Column.
 func (r *Relation) UnmarshalYAML(data []byte) error {
 	s := struct {
 		Table             string   `yaml:"table"`
 		Columns           []string `yaml:"columns"`
-		Cardinality       string   `yaml:"cardinality"`
+		Cardinality       string   `yaml:"cardinality,omitempty"`
 		ParentTable       string   `yaml:"parentTable"`
 		ParentColumns     []string `yaml:"parentColumns"`
-		ParentCardinality string   `yaml:"parentCardinality"`
+		ParentCardinality string   `yaml:"parentCardinality,omitempty"`
 		Def               string   `yaml:"def"`
 		Virtual           bool     `yaml:"virtual"`
 	}{}

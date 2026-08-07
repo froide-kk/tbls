@@ -9,7 +9,7 @@ builds:
   flags:
     - -a
     - -tags
-    - netgo,timetzdata
+    - netgo,timetzdata,sqlite_fts5,minicore_disabled
     - -installsuffix
     - netgo
   ldflags:
@@ -26,6 +26,9 @@ builds:
   overrides:
     - goos: linux
       goarch: arm64
+      goamd64: ""
+      goarm: v8.0
+      gomips: ""
       env:
         - CC=aarch64-linux-gnu-gcc
         - CXX=aarch64-linux-gnu-g++
@@ -41,7 +44,7 @@ archives:
 checksum:
   name_template: 'checksums-linux.txt'
 snapshot:
-  name_template: "{{ .Version }}-next"
+  version_template: "{{ .Version }}-next"
 changelog:
   sort: asc
   filters:
@@ -66,4 +69,4 @@ nfpms:
     epoch: 1
 release:
   draft: true
-  skip_upload: true
+  replace_existing_draft: true

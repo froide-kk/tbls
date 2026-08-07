@@ -36,10 +36,10 @@ jobs:
         uses: isbang/setup-awscli@v0.1.0
 
       - name: Check out source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -60,6 +60,7 @@ jobs:
         with:
           go_version_file: go.mod
           reporter: github-pr-check
+          cache: false
 
       - name: Run test
         run: make ci
@@ -86,7 +87,7 @@ jobs:
     name: Test
     strategy:
       matrix:
-        platform: [windows-2019, windows-latest]
+        platform: [windows-2022, windows-latest]
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Use LF
@@ -102,10 +103,10 @@ jobs:
         uses: isbang/setup-awscli@v0.1.0
 
       - name: Check out source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 

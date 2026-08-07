@@ -16,12 +16,12 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Check out source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -35,7 +35,7 @@ jobs:
           tbls version
 
       - name: Run GoReleaser (dry-run)
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
           version: latest
@@ -49,18 +49,18 @@ jobs:
       - name: Install packages
         run: |
           sudo apt-get update
-          sudo apt-get install sqlite3 gcc-aarch64-linux-gnu
+          sudo apt-get install sqlite3 gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
       - name: Install aws-cli
         uses: isbang/setup-awscli@v0.1.0
 
       - name: Check out source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -70,10 +70,10 @@ jobs:
           tbls version
 
       - name: Run GoReleaser (dry-run)
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
-          version: latest
+          version: v2.5.1
           args: --config .goreleaser/linux.yml --clean --snapshot --skip=publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -81,7 +81,7 @@ jobs:
   windows-release-test:
     strategy:
       matrix:
-        os: [windows-2019, windows-latest]
+        os: [windows-2022, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Use LF
@@ -97,12 +97,12 @@ jobs:
         uses: isbang/setup-awscli@v0.1.0
 
       - name: Check out source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -112,10 +112,41 @@ jobs:
           tbls version
 
       - name: Run GoReleaser (dry-run)
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
           version: latest
           args: --config .goreleaser/windows.yml --clean --snapshot --skip=publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dockerimage-test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Get latest version
+        id: latest_version
+        run: |
+          echo -n 'version=' > $GITHUB_OUTPUT
+          gh release list --limit 1 | cut -f 1 >> $GITHUB_OUTPUT
+          cat $GITHUB_OUTPUT
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: false

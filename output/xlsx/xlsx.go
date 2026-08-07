@@ -14,12 +14,12 @@ import (
 	"github.com/loadoff/excl"
 )
 
-// Xlsx struct
+// Xlsx struct.
 type Xlsx struct {
 	config *config.Config
 }
 
-// New return Xlsx
+// New return Xlsx.
 func New(c *config.Config) *Xlsx {
 	return &Xlsx{
 		config: c,
@@ -54,7 +54,7 @@ func (x *Xlsx) OutputSchema(wr io.Writer, s *schema.Schema) (e error) {
 	if err != nil {
 		return err
 	}
-	b, err := os.ReadFile(filepath.Clean(path))
+	b, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func (x *Xlsx) OutputTable(wr io.Writer, t *schema.Table) (e error) {
 	if err != nil {
 		return err
 	}
-	b, err := os.ReadFile(filepath.Clean(path))
+	b, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec
 	if err != nil {
 		return err
 	}

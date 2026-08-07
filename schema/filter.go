@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	wildcard "github.com/IGLOU-EU/go-wildcard/v2"
 	"github.com/k1LoW/errors"
-	"github.com/minio/pkg/wildcard"
 	"github.com/samber/lo"
 )
 
@@ -20,7 +20,7 @@ func (s *Schema) Filter(opt *FilterOption) (err error) {
 	defer func() {
 		err = errors.WithStack(err)
 	}()
-	_, excludes, err := s.SepareteTablesThatAreIncludedOrNot(opt)
+	_, excludes, err := s.SeparateTablesThatAreIncludedOrNot(opt)
 	if err != nil {
 		return err
 	}
@@ -31,10 +31,21 @@ func (s *Schema) Filter(opt *FilterOption) (err error) {
 		}
 	}
 
+	_, excludedFuncs, err := s.SeparateFunctionsThatAreIncludedOrNot(opt)
+	if err != nil {
+		return err
+	}
+	for _, f := range excludedFuncs {
+		err := excludeFunctionFromSchema(f.Name, s)
+		if err != nil {
+			return fmt.Errorf("failed to filter function '%s': %w", f.Name, err)
+		}
+	}
+
 	return nil
 }
 
-func (s *Schema) SepareteTablesThatAreIncludedOrNot(opt *FilterOption) (_ []*Table, _ []*Table, err error) {
+func (s *Schema) SeparateTablesThatAreIncludedOrNot(opt *FilterOption) (_ []*Table, _ []*Table, err error) {
 	defer func() {
 		err = errors.WithStack(err)
 	}()
@@ -80,6 +91,8 @@ func (s *Schema) SepareteTablesThatAreIncludedOrNot(opt *FilterOption) (_ []*Tab
 		}
 		for _, tt := range ts {
 			if !lo.ContainsBy(includes, func(t *Table) bool {
+				return tt.Name == t.Name
+			}) && !lo.ContainsBy(includes2, func(t *Table) bool {
 				return tt.Name == t.Name
 			}) {
 				includes2 = append(includes2, tt)
@@ -161,7 +174,7 @@ func matchTableOrColumnLabels(il []string, t *Table) bool {
 func matchLabels(il []string, l Labels) bool {
 	for _, ll := range l {
 		for _, ill := range il {
-			if wildcard.MatchSimple(ill, ll.Name) {
+			if wildcard.Match(ill, ll.Name) {
 				return true
 			}
 		}
@@ -171,9 +184,59 @@ func matchLabels(il []string, l Labels) bool {
 
 func matchLength(s []string, e string) (int, bool) {
 	for _, v := range s {
-		if wildcard.MatchSimple(v, e) {
+		if wildcard.Match(v, e) {
 			return len(strings.ReplaceAll(v, "*", "")), true
 		}
 	}
 	return 0, false
+}
+
+func (s *Schema) SeparateFunctionsThatAreIncludedOrNot(opt *FilterOption) (_ []*Function, _ []*Function, err error) {
+	defer func() {
+		err = errors.WithStack(err)
+	}()
+	i := append(opt.Include, s.NormalizeTableNames(opt.Include)...)
+	e := append(opt.Exclude, s.NormalizeTableNames(opt.Exclude)...)
+
+	includes := []*Function{}
+	excludes := []*Function{}
+	for _, f := range s.Functions {
+		li, mi := matchLength(i, f.Name)
+		le, me := matchLength(e, f.Name)
+		switch {
+		case mi:
+			if me && li < le {
+				excludes = append(excludes, f)
+				continue
+			}
+			includes = append(includes, f)
+		case len(opt.Include) == 0:
+			if me {
+				excludes = append(excludes, f)
+				continue
+			}
+			includes = append(includes, f)
+		default:
+			excludes = append(excludes, f)
+		}
+	}
+
+	// assert
+	if len(s.Functions) != len(includes)+len(excludes) {
+		return nil, nil, fmt.Errorf("failed to separate functions. Expected: %d, actual: %d", len(s.Functions), len(includes)+len(excludes))
+	}
+
+	return includes, excludes, nil
+}
+
+func excludeFunctionFromSchema(name string, s *Schema) error {
+	functions := []*Function{}
+	for _, f := range s.Functions {
+		if f.Name != name {
+			functions = append(functions, f)
+		}
+	}
+	s.Functions = functions
+
+	return nil
 }

@@ -11,14 +11,16 @@ type Dict struct {
 	s sync.Map `json:"-" yaml:"-"`
 }
 
-// New return Dict
+// New return Dict.
 func New() Dict {
 	return Dict{}
 }
 
 func (d *Dict) Lookup(k string) string {
 	if v, ok := d.s.Load(k); ok {
-		return v.(string)
+		if str, ok := v.(string); ok {
+			return str
+		}
 	}
 	return k
 }

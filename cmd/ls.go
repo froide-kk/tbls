@@ -26,21 +26,21 @@ import (
 	"os"
 	"strings"
 
+	wildcard "github.com/IGLOU-EU/go-wildcard/v2"
 	"github.com/k1LoW/tbls/config"
 	"github.com/k1LoW/tbls/schema"
-	"github.com/minio/pkg/wildcard"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 )
 
 var long bool
 
-// lsCmd represents the ls command
+// lsCmd represents the ls command.
 var lsCmd = &cobra.Command{
 	Use:   "ls",
 	Short: "list schema resources",
 	Long:  `list schema resources.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		c, err := config.New()
 		if err != nil {
 			return err
@@ -91,7 +91,7 @@ var lsCmd = &cobra.Command{
 		matches := []*schema.Table{}
 		for _, t := range s.Tables {
 			for _, p := range patterns {
-				if wildcard.MatchSimple(p, t.Name) {
+				if wildcard.Match(p, t.Name) {
 					matches = append(matches, t)
 				}
 			}

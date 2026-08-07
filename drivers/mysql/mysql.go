@@ -20,7 +20,7 @@ var reAI = regexp.MustCompile(` AUTO_INCREMENT=[\d]+`)
 var supportGeneratedColumn = true
 var supportCheckConstraint = true
 
-// Mysql struct
+// Mysql struct.
 type Mysql struct {
 	db        *sql.DB
 	mariaMode bool
@@ -52,7 +52,7 @@ func HideAutoIcrrement() drivers.Option {
 	}
 }
 
-// New return new Mysql
+// New return new Mysql.
 func New(db *sql.DB, opts ...drivers.Option) (*Mysql, error) {
 	m := &Mysql{
 		db: db,
@@ -66,7 +66,7 @@ func New(db *sql.DB, opts ...drivers.Option) (*Mysql, error) {
 	return m, nil
 }
 
-// Analyze MySQL database schema
+// Analyze MySQL database schema.
 func (m *Mysql) Analyze(s *schema.Schema) error {
 	d, err := m.Info()
 	if err != nil {
@@ -366,7 +366,7 @@ AND table_name = ?;
 SELECT
   kcu.table_name,
   kcu.constraint_name,
-  sub.costraint_type,
+  sub.constraint_type,
   GROUP_CONCAT(kcu.column_name ORDER BY kcu.ordinal_position, position_in_unique_constraint SEPARATOR ', ') AS column_name,
   kcu.referenced_table_name,
   GROUP_CONCAT(kcu.referenced_column_name ORDER BY kcu.ordinal_position, position_in_unique_constraint SEPARATOR ', ') AS referenced_column_name
@@ -386,7 +386,7 @@ INNER JOIN
         WHEN c.column_key = 'UNI' THEN 'UNIQUE'
         WHEN c.column_key = 'MUL' THEN 'UNIQUE'
         ELSE 'UNKNOWN'
-   END) AS costraint_type
+   END) AS constraint_type
    FROM information_schema.key_column_usage AS kcu
    LEFT JOIN information_schema.columns AS c ON kcu.table_schema = c.table_schema AND kcu.table_name = c.table_name AND kcu.column_name = c.column_name
    WHERE kcu.ordinal_position = 1
@@ -396,7 +396,8 @@ ON kcu.constraint_name = sub.constraint_name
   AND kcu.table_name = sub.table_name
   AND (kcu.referenced_table_name = sub.referenced_table_name OR (kcu.referenced_table_name IS NULL AND sub.referenced_table_name IS NULL))
 WHERE kcu.table_schema= ?
-GROUP BY kcu.table_name, kcu.constraint_name, sub.costraint_type, kcu.referenced_table_name`, s.Name)
+GROUP BY kcu.table_name, kcu.constraint_name, sub.constraint_type, kcu.referenced_table_name
+ORDER BY kcu.table_name, kcu.constraint_name, sub.constraint_type, kcu.referenced_table_name`, s.Name)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -459,6 +460,7 @@ SELECT
 FROM information_schema.check_constraints AS c
 JOIN information_schema.table_constraints AS t ON c.constraint_schema = t.constraint_schema AND c.constraint_name = t.constraint_name
 WHERE t.table_schema = ?
+ORDER BY t.table_name, c.constraint_name
 `, s.Name)
 		if err != nil {
 			return errors.WithStack(err)
@@ -590,7 +592,7 @@ func (m *Mysql) getFunctions() ([]*schema.Function, error) {
 	return functions, nil
 }
 
-// Info return schema.Driver
+// Info return schema.Driver.
 func (m *Mysql) Info() (*schema.Driver, error) {
 	var v string
 	row := m.db.QueryRow(`SELECT version();`)
@@ -619,7 +621,7 @@ func (m *Mysql) Info() (*schema.Driver, error) {
 	return d, nil
 }
 
-// EnableMariaMode enable mariaMode
+// EnableMariaMode enable mariaMode.
 func (m *Mysql) EnableMariaMode() {
 	m.mariaMode = true
 }

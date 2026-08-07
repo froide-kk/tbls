@@ -295,6 +295,7 @@ func testdataDir() string {
 }
 
 func newTestSchema(t *testing.T) *Schema {
+	t.Helper()
 	ca := &Column{
 		Name:     "a",
 		Type:     "bigint(20)",
@@ -366,4 +367,164 @@ func newTestSchema(t *testing.T) *Schema {
 		},
 	}
 	return s
+}
+
+func TestViewpointsMerge(t *testing.T) {
+	t.Run("same tables with different names should not be merged", func(t *testing.T) {
+		vs := Viewpoints{}
+
+		v1 := &Viewpoint{
+			Name:   "Viewpoint 1",
+			Tables: []string{"table_a", "table_b"},
+		}
+		v2 := &Viewpoint{
+			Name:   "Viewpoint 2",
+			Tables: []string{"table_a", "table_b"},
+		}
+
+		vs = vs.Merge(v1)
+		vs = vs.Merge(v2)
+
+		if len(vs) != 2 {
+			t.Fatalf("expected 2 viewpoints, got %d", len(vs))
+		}
+		if vs[0].Name != "Viewpoint 1" {
+			t.Errorf("expected first viewpoint name to be 'Viewpoint 1', got '%s'", vs[0].Name)
+		}
+		if vs[1].Name != "Viewpoint 2" {
+			t.Errorf("expected second viewpoint name to be 'Viewpoint 2', got '%s'", vs[1].Name)
+		}
+	})
+
+	t.Run("same labels with different names should not be merged", func(t *testing.T) {
+		vs := Viewpoints{}
+
+		v1 := &Viewpoint{
+			Name:   "Label Viewpoint 1",
+			Labels: []string{"label1", "label2"},
+		}
+		v2 := &Viewpoint{
+			Name:   "Label Viewpoint 2",
+			Labels: []string{"label1", "label2"},
+		}
+
+		vs = vs.Merge(v1)
+		vs = vs.Merge(v2)
+
+		if len(vs) != 2 {
+			t.Fatalf("expected 2 viewpoints, got %d", len(vs))
+		}
+		if vs[0].Name != "Label Viewpoint 1" {
+			t.Errorf("expected first viewpoint name to be 'Label Viewpoint 1', got '%s'", vs[0].Name)
+		}
+		if vs[1].Name != "Label Viewpoint 2" {
+			t.Errorf("expected second viewpoint name to be 'Label Viewpoint 2', got '%s'", vs[1].Name)
+		}
+	})
+
+	t.Run("same name should be merged (updated)", func(t *testing.T) {
+		vs := Viewpoints{}
+
+		v1 := &Viewpoint{
+			Name:   "Same Name",
+			Tables: []string{"table_a"},
+			Desc:   "First description",
+		}
+		v2 := &Viewpoint{
+			Name:   "Same Name",
+			Tables: []string{"table_b"},
+			Desc:   "Updated description",
+		}
+
+		vs = vs.Merge(v1)
+		vs = vs.Merge(v2)
+
+		if len(vs) != 1 {
+			t.Errorf("expected 1 viewpoint, got %d", len(vs))
+		}
+		if vs[0].Desc != "Updated description" {
+			t.Errorf("expected viewpoint to be updated, got desc '%s'", vs[0].Desc)
+		}
+	})
+
+	t.Run("different names and different tables should not be merged", func(t *testing.T) {
+		vs := Viewpoints{}
+
+		v1 := &Viewpoint{
+			Name:   "Viewpoint A",
+			Tables: []string{"table_a"},
+		}
+		v2 := &Viewpoint{
+			Name:   "Viewpoint B",
+			Tables: []string{"table_b"},
+		}
+
+		vs = vs.Merge(v1)
+		vs = vs.Merge(v2)
+
+		if len(vs) != 2 {
+			t.Errorf("expected 2 viewpoints, got %d", len(vs))
+		}
+	})
+}
+
+func TestViewpointName(t *testing.T) {
+	tests := []struct {
+		id    string
+		index int
+		want  string
+	}{
+		{"", 0, "viewpoint-0"},
+		{"", 3, "viewpoint-3"},
+		{"overview", 0, "viewpoint-overview"},
+		{"概要", 1, "viewpoint-概要"},
+		{"../../pwned", 2, "viewpoint-2"}, // path separators fall back to index
+		{`a\b`, 4, "viewpoint-4"},         // backslash falls back to index
+	}
+	for _, tt := range tests {
+		if got := ViewpointName(tt.id, tt.index); got != tt.want {
+			t.Errorf("ViewpointName(%q, %d) = %q, want %q", tt.id, tt.index, got, tt.want)
+		}
+	}
+}
+
+func TestFindViewpoint(t *testing.T) {
+	s := &Schema{
+		Viewpoints: Viewpoints{
+			&Viewpoint{ID: "overview", Name: "Overview"},
+			&Viewpoint{Name: "No ID"},
+		},
+	}
+	tests := []struct {
+		locator   string
+		wantErr   bool
+		want      string
+		wantIndex int
+	}{
+		{"overview", false, "Overview", 0}, // by id
+		{"0", false, "Overview", 0},         // by index
+		{"1", false, "No ID", 1},            // by index
+		{"unknown", true, "", 0},            // unknown id and not a number
+		{"2", true, "", 0},                  // index out of range
+		{"-1", true, "", 0},                 // negative index
+	}
+	for _, tt := range tests {
+		v, index, err := s.FindViewpoint(tt.locator)
+		if tt.wantErr {
+			if err == nil {
+				t.Errorf("FindViewpoint(%q) expected error, got nil", tt.locator)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("FindViewpoint(%q) unexpected error: %v", tt.locator, err)
+			continue
+		}
+		if v.Name != tt.want {
+			t.Errorf("FindViewpoint(%q) = %q, want %q", tt.locator, v.Name, tt.want)
+		}
+		if index != tt.wantIndex {
+			t.Errorf("FindViewpoint(%q) index = %d, want %d", tt.locator, index, tt.wantIndex)
+		}
+	}
 }

@@ -17,13 +17,13 @@ import (
 var reFK = regexp.MustCompile(`FOREIGN KEY \((.+)\) REFERENCES ([^\s\)]+)\s?\(([^\)]+)\)`)
 var reVersion = regexp.MustCompile(`([0-9]+(\.[0-9]+)*)`)
 
-// Postgres struct
+// Postgres struct.
 type Postgres struct {
 	db     *sql.DB
 	rsMode bool
 }
 
-// New return new Postgres
+// New return new Postgres.
 func New(db *sql.DB) *Postgres {
 	return &Postgres{
 		db:     db,
@@ -31,7 +31,7 @@ func New(db *sql.DB) *Postgres {
 	}
 }
 
-// Analyze PostgreSQL database schema
+// Analyze PostgreSQL database schema.
 func (p *Postgres) Analyze(s *schema.Schema) (err error) {
 	defer func() {
 		err = errors.WithStack(err)
@@ -404,7 +404,8 @@ const queryFunctions95 = `SELECT
 FROM pg_proc AS p
 LEFT JOIN pg_namespace AS n ON p.pronamespace = n.oid
 LEFT JOIN pg_type AS t ON t.oid = p.prorettype
-WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')`
+WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+ORDER BY p.oid;`
 
 const queryFunctions = `SELECT
   n.nspname AS schema_name,
@@ -415,7 +416,8 @@ const queryFunctions = `SELECT
 FROM pg_proc AS p
 LEFT JOIN pg_namespace AS n ON p.pronamespace = n.oid
 LEFT JOIN pg_type AS t ON t.oid = p.prorettype
-WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')`
+WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+ORDER BY p.oid;`
 
 const queryStoredProcedureSupported = `SELECT column_name
 FROM information_schema.columns
@@ -500,6 +502,11 @@ func (p *Postgres) getFunctionsByQuery(query string) ([]*schema.Function, error)
 func (p *Postgres) getEnums() ([]*schema.Enum, error) {
 	enums := []*schema.Enum{}
 
+	// Amazon RedShift does not support enum
+	if p.rsMode {
+		return enums, nil
+	}
+
 	enumsResult, err := p.db.Query(`SELECT n.nspname, t.typname AS enum_name, ARRAY_AGG(e.enumlabel) AS enum_values
 											FROM pg_type t, pg_enum e, pg_catalog.pg_namespace n
 											WHERE t.typcategory = 'E'
@@ -536,7 +543,7 @@ func fullTableName(owner string, tableName string) string {
 	return fmt.Sprintf("%s.%s", owner, tableName)
 }
 
-// Info return schema.Driver
+// Info return schema.Driver.
 func (p *Postgres) Info() (*schema.Driver, error) {
 	var v string
 	row := p.db.QueryRow(`SELECT version();`)
@@ -565,7 +572,7 @@ func (p *Postgres) Info() (*schema.Driver, error) {
 	return d, nil
 }
 
-// EnableRsMode enable rsMode
+// EnableRsMode enable rsMode.
 func (p *Postgres) EnableRsMode() {
 	p.rsMode = true
 }
@@ -580,7 +587,7 @@ func (p *Postgres) queryForColumns(v string) (_ string, err error) {
 	}
 	// v => PostgreSQL 9.5.24 on x86_64-pc-linux-gnu (Debian 9.5.24-1.pgdg90+1), compiled by gcc (Debian 6.3.0-18+deb9u1) 6.3.0 20170516, 64-bit
 	matches := reVersion.FindStringSubmatch(v)
-	if matches == nil || len(matches) < 2 {
+	if len(matches) < 2 {
 		return "", fmt.Errorf("malformed version: %s", v)
 	}
 	vv, err := version.Parse(matches[1])
@@ -610,8 +617,8 @@ AND NOT attr.attisdropped
 AND attr.attrelid = $1::oid
 ORDER BY attr.attnum;
 `, nil
-	} else {
-		return `
+	}
+	return `
 SELECT
     attr.attname AS column_name,
     pg_get_expr(def.adbin, def.adrelid) AS column_default,
@@ -633,7 +640,6 @@ AND NOT attr.attisdropped
 AND attr.attrelid = $1::oid
 ORDER BY attr.attnum;
 `, nil
-	}
 }
 
 func (p *Postgres) queryForConstraints() string {
@@ -649,28 +655,25 @@ ORDER BY conname`
 SELECT
   cons.conname AS name,
   CASE WHEN cons.contype = 't' THEN pg_get_triggerdef(trig.oid)
-        ELSE pg_get_constraintdef(cons.oid)
+  ELSE pg_get_constraintdef(cons.oid)
   END AS def,
   cons.contype AS type,
-  fcls.relname,
-  ARRAY_AGG(attr.attname),
-  ARRAY_AGG(fattr.attname),
+  fns.nspname || '.' || fcls.relname,
+  (SELECT ARRAY_AGG(attr.attname ORDER BY ARRAY_POSITION(cons.conkey, attr.attnum)) FROM pg_attribute AS attr WHERE attr.attrelid = cons.conrelid AND attr.attnum = ANY(cons.conkey)),
+  (SELECT ARRAY_AGG(fattr.attname ORDER BY ARRAY_POSITION(cons.confkey, fattr.attnum)) FROM pg_attribute AS fattr WHERE fattr.attrelid = cons.confrelid AND fattr.attnum = ANY(cons.confkey)),
   descr.description AS comment
 FROM pg_constraint AS cons
 LEFT JOIN pg_trigger AS trig ON trig.tgconstraint = cons.oid AND NOT trig.tgisinternal
 LEFT JOIN pg_class AS fcls ON cons.confrelid = fcls.oid
-LEFT JOIN pg_attribute AS attr ON attr.attrelid = cons.conrelid
-LEFT JOIN pg_attribute AS fattr ON fattr.attrelid = cons.confrelid
+LEFT JOIN pg_namespace AS fns ON fcls.relnamespace = fns.oid
 LEFT JOIN pg_description AS descr ON cons.oid = descr.objoid
 WHERE
-	cons.conrelid = $1::oid
-AND (cons.conkey IS NULL OR attr.attnum = ANY(cons.conkey))
-AND (cons.confkey IS NULL OR fattr.attnum = ANY(cons.confkey))
-GROUP BY cons.conindid, cons.conname, cons.contype, cons.oid, trig.oid, fcls.relname, descr.description
+cons.conrelid = $1::oid
+GROUP BY cons.conindid, cons.conname, cons.contype, cons.oid, trig.oid, fns.nspname, fcls.relname, descr.description, cons.conkey, cons.confkey, cons.conrelid, cons.confrelid
 ORDER BY cons.conindid, cons.conname`
 }
 
-// arrayRemoveNull
+// arrayRemoveNull.
 func arrayRemoveNull(in []sql.NullString) []string {
 	out := []string{}
 	for _, i := range in {

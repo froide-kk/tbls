@@ -15,16 +15,16 @@ import (
 )
 
 var reFK = regexp.MustCompile(`FOREIGN KEY \((.+)\) REFERENCES ([^\s\)]+)\s?\(([^\)]+)\)`)
-var reFTS = regexp.MustCompile(`(?i)USING\s+fts([34])`)
+var reFTS = regexp.MustCompile(`(?i)USING\s+fts([345])`)
 
 var shadowTables []string
 
-// Sqlite struct
+// Sqlite struct.
 type Sqlite struct {
 	db *sql.DB
 }
 
-// New return new Sqlite
+// New return new Sqlite.
 func New(db *sql.DB) *Sqlite {
 	return &Sqlite{
 		db: db,
@@ -41,7 +41,7 @@ type fk struct {
 	Match              string
 }
 
-// Analyze SQLite database schema
+// Analyze SQLite database schema.
 func (l *Sqlite) Analyze(s *schema.Schema) (err error) {
 	defer func() {
 		err = errors.WithStack(err)
@@ -77,18 +77,33 @@ WHERE name != 'sqlite_sequence' AND (type = 'table' OR type = 'view');`)
 		}
 
 		if reFTS.MatchString(tableDef) {
-			tableType = "virtual table"
-			matches := reFTS.FindStringSubmatch(tableDef)
-			if len(matches) < 1 {
-				return fmt.Errorf("can not parse table definition: %s", tableDef)
-			}
-			shadowTables = append(shadowTables, fmt.Sprintf("%s_content", tableName))
-			shadowTables = append(shadowTables, fmt.Sprintf("%s_segdir", tableName))
-			shadowTables = append(shadowTables, fmt.Sprintf("%s_segments", tableName))
-			if matches[1] == "4" {
-				shadowTables = append(shadowTables, fmt.Sprintf("%s_stat", tableName))
-				shadowTables = append(shadowTables, fmt.Sprintf("%s_docsize", tableName))
-			}
+		    tableType = "virtual table"
+		    matches := reFTS.FindStringSubmatch(tableDef)
+		    if len(matches) < 1 {
+		        return fmt.Errorf("can not parse table definition: %s", tableDef)
+		    }
+
+		    switch matches[1] {
+		    case "3":
+		        // FTS3 shadow tables
+		        shadowTables = append(shadowTables, fmt.Sprintf("%s_content", tableName))
+		        shadowTables = append(shadowTables, fmt.Sprintf("%s_segdir", tableName))
+		        shadowTables = append(shadowTables, fmt.Sprintf("%s_segments", tableName))
+		    case "4":
+		        // FTS4 shadow tables
+		        shadowTables = append(shadowTables, fmt.Sprintf("%s_content", tableName))
+		        shadowTables = append(shadowTables, fmt.Sprintf("%s_segdir", tableName))
+		        shadowTables = append(shadowTables, fmt.Sprintf("%s_segments", tableName))
+		        shadowTables = append(shadowTables, fmt.Sprintf("%s_stat", tableName))
+		        shadowTables = append(shadowTables, fmt.Sprintf("%s_docsize", tableName))
+		    case "5":
+		        // FTS5 shadow tables
+		        shadowTables = append(shadowTables, fmt.Sprintf("%s_data", tableName))
+		        shadowTables = append(shadowTables, fmt.Sprintf("%s_idx", tableName))
+		        shadowTables = append(shadowTables, fmt.Sprintf("%s_docsize", tableName))
+		        shadowTables = append(shadowTables, fmt.Sprintf("%s_config", tableName))
+		        shadowTables = append(shadowTables, fmt.Sprintf("%s_content", tableName))
+		    }
 		}
 
 		table := &schema.Table{
@@ -417,7 +432,7 @@ SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name = ?;
 	return nil
 }
 
-// Info return schema.Driver
+// Info return schema.Driver.
 func (l *Sqlite) Info() (*schema.Driver, error) {
 	var v string
 	row := l.db.QueryRow(`SELECT sqlite_version();`)

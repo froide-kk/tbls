@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cli/safeexec"
 	"github.com/k1LoW/errors"
 	"github.com/k1LoW/tbls/cmdutil"
 	"github.com/k1LoW/tbls/config"
@@ -38,38 +39,38 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// adjust is a flag on whether to adjust the notation width of the table
+// adjust is a flag on whether to adjust the notation width of the table.
 var adjust bool
 
-// force is a flag on whether to force generate
+// force is a flag on whether to force generate.
 var force bool
 
-// sort is a flag on whether to sort tables, columns, and more
+// sort is a flag on whether to sort tables, columns, and more.
 var sort bool
 
-// configPath is a config file path
+// configPath is a config file path.
 var configPath string
 
-// erFormat is a option that ER diagram file format
+// erFormat is a option that ER diagram file format.
 var erFormat string
 
-// when is a option that command execute condition
+// when is a option that command execute condition.
 var when string
 
-// base url for links
-var baseUrl string
+// base url for links.
+var baseURL string
 
-// tables to include
+// tables to include.
 var includes []string
 var tables []string
 
-// tables to excludes
+// tables to excludes.
 var excludes []string
 
-// table labels to be included
+// table labels to be included.
 var labels []string
 
-// dsn
+// dsn.
 var dsn string
 
 const rootUsageTemplate = `Usage:{{if .Runnable}}{{if ne .UseLine "tbls [flags]" }}
@@ -99,7 +100,7 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.{{e
 
 var subCmds = []string{}
 
-// rootCmd represents the base command when called without any subcommands
+// rootCmd represents the base command when called without any subcommands.
 var rootCmd = &cobra.Command{
 	Use:                "tbls",
 	Short:              "tbls is a CI-Friendly tool for document a database, written in Go.",
@@ -127,7 +128,7 @@ var rootCmd = &cobra.Command{
 
 		envs := os.Environ()
 		subCmd := args[0]
-		path, err := exec.LookPath(version.Name + "-" + subCmd)
+		bin, err := safeexec.LookPath(version.Name + "-" + subCmd)
 		if err != nil {
 			if strings.HasPrefix(subCmd, "-") {
 				cmd.PrintErrf("Error: unknown flag: '%s'\n", subCmd)
@@ -168,7 +169,7 @@ var rootCmd = &cobra.Command{
 			envs = append(envs, fmt.Sprintf("TBLS_SCHEMA=%s", tmpfile.Name()))
 		}
 
-		c := exec.Command(path, args...) // #nosec
+		c := exec.Command(bin, args...) // #nosec
 		c.Env = envs
 		c.Stdout = os.Stdout
 		c.Stdin = os.Stdin
@@ -201,9 +202,9 @@ func init() {
 	rootCmd.Flags().StringVarP(&dsn, "dsn", "", "", "data source name")
 }
 
-// genValidArgsFunc
+// genValidArgsFunc.
 func genValidArgsFunc(prefix string) func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		toC := toComplete
 		if len(args) > 0 {
 			toC = args[0]
@@ -234,7 +235,7 @@ func genValidArgsFunc(prefix string) func(cmd *cobra.Command, args []string, toC
 	}
 }
 
-// getExtSubCmds
+// getExtSubCmds.
 func getExtSubCmds(prefix string) ([]string, error) {
 	subCmds := []string{}
 	paths := lo.Uniq(filepath.SplitList(os.Getenv("PATH")))
@@ -251,6 +252,10 @@ func getExtSubCmds(prefix string) ([]string, error) {
 				continue
 			}
 			if !strings.HasPrefix(e.Name(), fmt.Sprintf("%s-", prefix)) {
+				continue
+			}
+			// Exclude external driver
+			if strings.HasPrefix(e.Name(), fmt.Sprintf("%s-driver-", prefix)) {
 				continue
 			}
 			fi, err := e.Info()

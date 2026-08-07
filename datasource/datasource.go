@@ -6,14 +6,18 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/cli/safeexec"
 	"github.com/k1LoW/errors"
 	"github.com/k1LoW/ghfs"
-	"github.com/k1LoW/go-github-client/v58/factory"
+	"github.com/k1LoW/go-github-client/v67/factory"
 	"github.com/k1LoW/tbls/config"
 	"github.com/k1LoW/tbls/drivers"
 	"github.com/k1LoW/tbls/drivers/clickhouse"
@@ -28,7 +32,16 @@ import (
 	"github.com/xo/dburl"
 )
 
-// Analyze database
+var supportDriversWithDburl = []string{
+	"postgres",
+	"mysql",
+	"sqlite3",
+	"sqlserver",
+	"snowflake",
+	"clickhouse",
+}
+
+// Analyze database.
 func Analyze(dsn config.DSN) (_ *schema.Schema, err error) {
 	defer func() {
 		err = errors.WithStack(err)
@@ -55,10 +68,17 @@ func Analyze(dsn config.DSN) (_ *schema.Schema, err error) {
 	if strings.HasPrefix(urlstr, "mongodb://") || strings.HasPrefix(urlstr, "mongo://") {
 		return AnalyzeMongodb(urlstr)
 	}
+	if strings.HasPrefix(urlstr, "databricks://") {
+		return AnalyzeDatabricks(urlstr)
+	}
 	s := &schema.Schema{}
 	u, err := dburl.Parse(urlstr)
+	if err != nil || !slices.Contains(supportDriversWithDburl, u.Driver) {
+		// Try ext driver
+		return AnalyzeWithExtDriver(urlstr)
+	}
 	if err != nil {
-		return s, err
+		return nil, err
 	}
 	splitted := strings.Split(u.Short(), "/")
 	if len(splitted) < 2 {
@@ -91,13 +111,13 @@ func Analyze(dsn config.DSN) (_ *schema.Schema, err error) {
 
 	db, err := dburl.Open(urlstr)
 	if err != nil {
-		return s, errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 	defer func() {
 		_ = db.Close()
 	}()
 	if err := db.Ping(); err != nil {
-		return s, errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
 	var driver drivers.Driver
@@ -118,7 +138,7 @@ func Analyze(dsn config.DSN) (_ *schema.Schema, err error) {
 			driver, err = mysql.New(db, opts...)
 		}
 		if err != nil {
-			return s, err
+			return nil, err
 		}
 	case "sqlite3":
 		s.Name = splitted[len(splitted)-1]
@@ -137,7 +157,7 @@ func Analyze(dsn config.DSN) (_ *schema.Schema, err error) {
 	}
 	err = driver.Analyze(s)
 	if err != nil {
-		return s, err
+		return nil, err
 	}
 	return s, nil
 }
@@ -150,23 +170,23 @@ func AnalyzeHTTPResource(dsn config.DSN) (_ *schema.Schema, err error) {
 	s := &schema.Schema{}
 	req, err := http.NewRequest("GET", dsn.URL, nil)
 	if err != nil {
-		return s, err
+		return nil, err
 	}
 	for k, v := range dsn.Headers {
 		req.Header.Add(k, v)
 	}
 	client := &http.Client{Timeout: time.Duration(10) * time.Second}
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) //nolint:gosec
 	if err != nil {
-		return s, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	dec := json.NewDecoder(resp.Body)
 	if err := dec.Decode(s); err != nil {
-		return s, err
+		return nil, err
 	}
 	if err := s.Repair(); err != nil {
-		return s, err
+		return nil, err
 	}
 	return s, nil
 }
@@ -197,10 +217,10 @@ func AnalyzeGitHubContent(dsn config.DSN) (_ *schema.Schema, err error) {
 	}
 	dec := json.NewDecoder(bytes.NewReader(b))
 	if err := dec.Decode(s); err != nil {
-		return s, err
+		return nil, err
 	}
 	if err := s.Repair(); err != nil {
-		return s, err
+		return nil, err
 	}
 	return s, nil
 }
@@ -214,24 +234,24 @@ func AnalyzeJSON(urlstr string) (_ *schema.Schema, err error) {
 	splitted := strings.Split(urlstr, "json://")
 	file, err := os.Open(splitted[1])
 	if err != nil {
-		return s, err
+		return nil, err
 	}
 	dec := json.NewDecoder(file)
 	if err := dec.Decode(s); err != nil {
-		return s, err
+		return nil, err
 	}
 	if err := s.Repair(); err != nil {
-		return s, err
+		return nil, err
 	}
 	return s, nil
 }
 
-// Deprecated
+// Deprecated.
 func AnalyzeJSONString(str string) (*schema.Schema, error) {
 	return AnalyzeJSONStringOrFile(str)
 }
 
-// AnalyzeJSONStringOrFile analyze JSON string or JSON file
+// AnalyzeJSONStringOrFile analyze JSON string or JSON file.
 func AnalyzeJSONStringOrFile(strOrPath string) (s *schema.Schema, err error) {
 	defer func() {
 		err = errors.WithStack(err)
@@ -243,15 +263,47 @@ func AnalyzeJSONStringOrFile(strOrPath string) (s *schema.Schema, err error) {
 	} else {
 		buf, err = os.Open(filepath.Clean(strOrPath))
 		if err != nil {
-			return s, err
+			return nil, err
 		}
 	}
 	dec := json.NewDecoder(buf)
 	if err := dec.Decode(s); err != nil {
-		return s, err
+		return nil, err
 	}
 	if err := s.Repair(); err != nil {
-		return s, err
+		return nil, err
+	}
+	return s, nil
+}
+
+// AnalyzeWithExtDriver analyze with external driver command.
+func AnalyzeWithExtDriver(urlstr string) (*schema.Schema, error) {
+	u, err := url.Parse(urlstr)
+	if err != nil {
+		return nil, err
+	}
+	scheme := u.Scheme
+	bin, err := safeexec.LookPath(fmt.Sprintf("tbls-driver-%s", scheme))
+	if err != nil {
+		return nil, fmt.Errorf("unsupported driver '%s'", scheme)
+	}
+	envs := os.Environ()
+	envs = append(envs, fmt.Sprintf("TBLS_DSN=%s", urlstr))
+	c := exec.Command(bin)
+	buf := new(bytes.Buffer)
+	c.Stdout = buf
+	c.Stderr = os.Stderr
+	c.Env = envs
+	if err := c.Run(); err != nil {
+		return nil, err
+	}
+	s := &schema.Schema{}
+	dec := json.NewDecoder(buf)
+	if err := dec.Decode(s); err != nil {
+		return nil, err
+	}
+	if err := s.Repair(); err != nil {
+		return nil, err
 	}
 	return s, nil
 }

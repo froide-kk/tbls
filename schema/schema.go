@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
+	wildcard "github.com/IGLOU-EU/go-wildcard/v2"
 	"github.com/k1LoW/errors"
 	"github.com/k1LoW/tbls/dict"
 	"github.com/samber/lo"
@@ -30,8 +32,8 @@ var DefaultHideColumns = []string{ColumnExtraDef, ColumnOccurrences, ColumnPerce
 var HideableColumns = []string{ColumnExtraDef, ColumnOccurrences, ColumnPercents, ColumnChildren, ColumnParents, ColumnComment, ColumnLabels}
 
 type Label struct {
-	Name    string
-	Virtual bool
+	Name    string `json:"name"`
+	Virtual bool   `json:"virtual,omitempty"`
 }
 
 type Labels []*Label
@@ -49,10 +51,11 @@ func (labels Labels) Contains(name string) bool {
 	})
 }
 
-// Viewpoint is the struct for viewpoint information
+// Viewpoint is the struct for viewpoint information.
 type Viewpoint struct {
-	Name     string            `json:"name,omitempty"`
-	Desc     string            `json:"desc,omitempty"`
+	ID       string            `json:"id,omitempty"`
+	Name     string            `json:"name"`
+	Desc     string            `json:"desc"`
 	Labels   []string          `json:"labels,omitempty"`
 	Tables   []string          `json:"tables,omitempty"`
 	Distance int               `json:"distance,omitempty"`
@@ -62,8 +65,8 @@ type Viewpoint struct {
 }
 
 type ViewpointGroup struct {
-	Name   string   `json:"name,omitempty"`
-	Desc   string   `json:"desc,omitempty"`
+	Name   string   `json:"name"`
+	Desc   string   `json:"desc"`
 	Labels []string `json:"labels,omitempty"`
 	Tables []string `json:"tables,omitempty"`
 	Color  string   `json:"color,omitempty"`
@@ -73,10 +76,6 @@ type Viewpoints []*Viewpoint
 
 func (vs Viewpoints) Merge(in *Viewpoint) Viewpoints {
 	for i, v := range vs {
-		if sameElements(v.Labels, in.Labels) && sameElements(v.Tables, in.Tables) {
-			vs[i] = in
-			return vs
-		}
 		if v.Name == in.Name {
 			vs[i] = in
 			return vs
@@ -85,85 +84,111 @@ func (vs Viewpoints) Merge(in *Viewpoint) Viewpoints {
 	return append(vs, in)
 }
 
-// Index is the struct for database index
+// ViewpointName returns the basename (without extension) used for the viewpoint output file.
+// When id is set it is used to keep the name stable regardless of viewpoint order, otherwise the index is used.
+// Config validation rejects ids with path separators, but schemas loaded directly (e.g. json://) bypass it,
+// so fall back to the index-based name to keep the result safe to embed in file paths.
+func ViewpointName(id string, index int) string {
+	if id != "" && !strings.ContainsAny(id, `/\`) {
+		return fmt.Sprintf("viewpoint-%s", id)
+	}
+	return fmt.Sprintf("viewpoint-%d", index)
+}
+
+// FindViewpoint finds a viewpoint by id, falling back to index when locator is a number.
+// It also returns the index of the viewpoint.
+func (s *Schema) FindViewpoint(locator string) (*Viewpoint, int, error) {
+	for i, v := range s.Viewpoints {
+		if v.ID != "" && v.ID == locator {
+			return v, i, nil
+		}
+	}
+	if index, err := strconv.Atoi(locator); err == nil && index >= 0 && index < len(s.Viewpoints) {
+		return s.Viewpoints[index], index, nil
+	}
+	return nil, 0, fmt.Errorf("viewpoint not found: %s", locator)
+}
+
+// Index is the struct for database index.
 type Index struct {
 	Name    string   `json:"name"`
 	Def     string   `json:"def"`
 	Table   *string  `json:"table"`
 	Columns []string `json:"columns"`
-	Comment string   `json:"comment"`
+	Comment string   `json:"comment,omitempty"`
 }
 
-// Constraint is the struct for database constraint
+// Constraint is the struct for database constraint.
 type Constraint struct {
 	Name              string   `json:"name"`
 	Type              string   `json:"type"`
 	Def               string   `json:"def"`
 	Table             *string  `json:"table"`
-	ReferencedTable   *string  `json:"referenced_table" yaml:"referencedTable"`
-	Columns           []string `json:"columns"`
-	ReferencedColumns []string `json:"referenced_columns" yaml:"referencedColumns"`
-	Comment           string   `json:"comment"`
+	ReferencedTable   *string  `json:"referenced_table,omitempty" yaml:"referencedTable,omitempty"`
+	Columns           []string `json:"columns,omitempty"`
+	ReferencedColumns []string `json:"referenced_columns,omitempty" yaml:"referencedColumns,omitempty"`
+	Comment           string   `json:"comment,omitempty"`
 }
 
-// Trigger is the struct for database trigger
+// Trigger is the struct for database trigger.
 type Trigger struct {
 	Name    string `json:"name"`
 	Def     string `json:"def"`
-	Comment string `json:"comment"`
+	Comment string `json:"comment,omitempty"`
 }
 
-// Column is the struct for table column
+// Column is the struct for table column.
 type Column struct {
-	Name            string          `json:"name"`
-	Type            string          `json:"type"`
-	Nullable        bool            `json:"nullable"`
-	Default         sql.NullString  `json:"default"`
-	Comment         string          `json:"comment"`
-	ExtraDef        string          `json:"extra_def,omitempty" yaml:"extraDef,omitempty"`
-	Occurrences     sql.NullInt32   `json:"occurrences,omitempty" yaml:"occurrences,omitempty"`
-	Percents        sql.NullFloat64 `json:"percents,omitempty" yaml:"percents,omitempty"`
-	Labels          Labels          `json:"labels,omitempty"`
-	ParentRelations []*Relation     `json:"-"`
-	ChildRelations  []*Relation     `json:"-"`
-	PK              bool            `json:"-"`
-	FK              bool            `json:"-"`
-	HideForER       bool            `json:"-"`
+	Name            string
+	Type            string
+	Nullable        bool
+	Default         sql.NullString
+	Comment         string
+	ExtraDef        string
+	Occurrences     sql.NullInt32
+	Percents        sql.NullFloat64
+	Labels          Labels
+	ParentRelations []*Relation
+	ChildRelations  []*Relation
+	PK              bool
+	FK              bool
+	HideForER       bool
 }
 
 type TableViewpoint struct {
 	Index int    `json:"index"`
+	ID    string `json:"id,omitempty"`
 	Name  string `json:"name"`
 	Desc  string `json:"desc"`
 }
 
-// Table is the struct for database table
+// Table is the struct for database table.
 type Table struct {
-	Name             string            `json:"name"`
-	Type             string            `json:"type"`
-	Comment          string            `json:"comment"`
-	Columns          []*Column         `json:"columns"`
-	Viewpoints       []*TableViewpoint `json:"viewpoints"`
-	Indexes          []*Index          `json:"indexes"`
-	Constraints      []*Constraint     `json:"constraints"`
-	Triggers         []*Trigger        `json:"triggers"`
-	Def              string            `json:"def"`
-	Labels           Labels            `json:"labels,omitempty"`
-	ReferencedTables []*Table          `json:"referenced_tables,omitempty" yaml:"referencedTables,omitempty"`
-	External         bool              `json:"-"` // Table external to the schema
+	Name             string
+	Type             string
+	Comment          string
+	Columns          []*Column
+	Viewpoints       []*TableViewpoint
+	Indexes          []*Index
+	Constraints      []*Constraint
+	Triggers         []*Trigger
+	Def              string
+	Labels           Labels
+	ReferencedTables []*Table
+	External         bool
 }
 
-// Relation is the struct for table relation
+// Relation is the struct for table relation.
 type Relation struct {
-	Table             *Table      `json:"table"`
-	Columns           []*Column   `json:"columns"`
-	ParentTable       *Table      `json:"parent_table" yaml:"parentTable"`
-	ParentColumns     []*Column   `json:"parent_columns" yaml:"parentColumns"`
-	Cardinality       Cardinality `json:"cardinality"`
-	ParentCardinality Cardinality `json:"parent_cardinality" yaml:"parentCardinality"`
-	Def               string      `json:"def"`
-	Virtual           bool        `json:"virtual"`
-	HideForER         bool        `json:"-"`
+	Table             *Table
+	Columns           []*Column
+	ParentTable       *Table
+	ParentColumns     []*Column
+	Cardinality       Cardinality
+	ParentCardinality Cardinality
+	Def               string
+	Virtual           bool
+	HideForER         bool
 }
 
 type DriverMeta struct {
@@ -172,7 +197,7 @@ type DriverMeta struct {
 	Dict          *dict.Dict `json:"dict,omitempty"`
 }
 
-// Function is the struct for tbls stored procedure/function information
+// Function is the struct for tbls stored procedure/function information.
 type Function struct {
 	Name       string `json:"name"`
 	ReturnType string `json:"return_type" yaml:"returnType"`
@@ -185,22 +210,22 @@ type Enum struct {
 	Values []string `json:"values"`
 }
 
-// Driver is the struct for tbls driver information
+// Driver is the struct for tbls driver information.
 type Driver struct {
 	Name            string      `json:"name"`
-	DatabaseVersion string      `json:"database_version" yaml:"databaseVersion"`
-	Meta            *DriverMeta `json:"meta"`
+	DatabaseVersion string      `json:"database_version,omitempty" yaml:"databaseVersion,omitempty"`
+	Meta            *DriverMeta `json:"meta,omitempty"`
 }
 
-// Schema is the struct for database schema
+// Schema is the struct for database schema.
 type Schema struct {
-	Name       string      `json:"name"`
-	Desc       string      `json:"desc"`
+	Name       string      `json:"name,omitempty"`
+	Desc       string      `json:"desc,omitempty"`
 	Tables     []*Table    `json:"tables"`
-	Relations  []*Relation `json:"relations"`
-	Functions  []*Function `json:"functions"`
+	Relations  []*Relation `json:"relations,omitempty"`
+	Functions  []*Function `json:"functions,omitempty"`
 	Enums      []*Enum     `json:"enums,omitempty"`
-	Driver     *Driver     `json:"driver"`
+	Driver     *Driver     `json:"driver,omitempty"`
 	Labels     Labels      `json:"labels,omitempty"`
 	Viewpoints Viewpoints  `json:"viewpoints,omitempty"`
 }
@@ -219,7 +244,7 @@ func (s *Schema) NormalizeTableNames(names []string) []string {
 	return names
 }
 
-// FindTableByName find table by table name
+// FindTableByName find table by table name.
 func (s *Schema) FindTableByName(name string) (_ *Table, err error) {
 	defer func() {
 		err = errors.WithStack(err)
@@ -232,7 +257,24 @@ func (s *Schema) FindTableByName(name string) (_ *Table, err error) {
 	return nil, fmt.Errorf("not found table '%s'", name)
 }
 
-// FindRelation find relation by columns and parent columns
+// MatchTablesByName find table by table name.
+func (s *Schema) MatchTablesByName(name string) (_ []*Table, err error) {
+	defer func() {
+		err = errors.WithStack(err)
+	}()
+	var tables []*Table
+	for _, t := range s.Tables {
+		if wildcard.Match(s.NormalizeTableName(name), s.NormalizeTableName(t.Name)) {
+			tables = append(tables, t)
+		}
+	}
+	if len(tables) == 0 {
+		return nil, fmt.Errorf("not found table '%s'", name)
+	}
+	return tables, nil
+}
+
+// FindRelation find relation by columns and parent columns.
 func (s *Schema) FindRelation(cs, pcs []*Column) (_ *Relation, err error) {
 	defer func() {
 		err = errors.WithStack(err)
@@ -278,7 +320,7 @@ func (s *Schema) HasTableWithLabels() bool {
 	return false
 }
 
-// Sort schema tables, columns, relations, constrains, and viewpoints
+// Sort schema tables, columns, relations, constrains, and viewpoints.
 func (s *Schema) Sort() error {
 	for _, t := range s.Tables {
 		for _, c := range t.Columns {
@@ -320,7 +362,7 @@ func (s *Schema) Sort() error {
 	return nil
 }
 
-// Repair column relations
+// Repair column relations.
 func (s *Schema) Repair() (err error) {
 	defer func() {
 		err = errors.WithStack(err)
@@ -452,7 +494,7 @@ func (s *Schema) repairWithoutViewpoints() (err error) {
 	return nil
 }
 
-// FindColumnByName find column by column name
+// FindColumnByName find column by column name.
 func (t *Table) FindColumnByName(name string) (_ *Column, err error) {
 	defer func() {
 		err = errors.WithStack(err)
@@ -462,10 +504,10 @@ func (t *Table) FindColumnByName(name string) (_ *Column, err error) {
 			return c, nil
 		}
 	}
-	return nil, errors.New(fmt.Sprintf("not found column '%s' on table '%s'", name, t.Name))
+	return nil, fmt.Errorf("not found column '%s' on table '%s'", name, t.Name)
 }
 
-// FindIndexByName find index by index name
+// FindIndexByName find index by index name.
 func (t *Table) FindIndexByName(name string) (_ *Index, err error) {
 	defer func() {
 		err = errors.WithStack(err)
@@ -475,10 +517,10 @@ func (t *Table) FindIndexByName(name string) (_ *Index, err error) {
 			return i, nil
 		}
 	}
-	return nil, errors.New(fmt.Sprintf("not found index '%s' on table '%s'", name, t.Name))
+	return nil, fmt.Errorf("not found index '%s' on table '%s'", name, t.Name)
 }
 
-// FindConstraintByName find constraint by constraint name
+// FindConstraintByName find constraint by constraint name.
 func (t *Table) FindConstraintByName(name string) (_ *Constraint, err error) {
 	defer func() {
 		err = errors.WithStack(err)
@@ -488,10 +530,10 @@ func (t *Table) FindConstraintByName(name string) (_ *Constraint, err error) {
 			return c, nil
 		}
 	}
-	return nil, errors.New(fmt.Sprintf("not found constraint '%s' on table '%s'", name, t.Name))
+	return nil, fmt.Errorf("not found constraint '%s' on table '%s'", name, t.Name)
 }
 
-// FindTriggerByName find trigger by trigger name
+// FindTriggerByName find trigger by trigger name.
 func (t *Table) FindTriggerByName(name string) (_ *Trigger, err error) {
 	defer func() {
 		err = errors.WithStack(err)
@@ -501,10 +543,10 @@ func (t *Table) FindTriggerByName(name string) (_ *Trigger, err error) {
 			return trig, nil
 		}
 	}
-	return nil, errors.New(fmt.Sprintf("not found trigger '%s' on table '%s'", name, t.Name))
+	return nil, fmt.Errorf("not found trigger '%s' on table '%s'", name, t.Name)
 }
 
-// FindConstrainsByColumnName find constraint by column name
+// FindConstrainsByColumnName find constraint by column name.
 func (t *Table) FindConstrainsByColumnName(name string) []*Constraint {
 	cts := []*Constraint{}
 	for _, ct := range t.Constraints {
@@ -616,11 +658,4 @@ func (t *Table) CollectTablesAndRelations(distance int, root bool) ([]*Table, []
 	}
 
 	return uTables, uRelations, nil
-}
-
-func sameElements(a, b []string) bool {
-	if len(a) == len(b) && lo.Every(a, b) {
-		return true
-	}
-	return false
 }

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	wildcard "github.com/IGLOU-EU/go-wildcard/v2"
 	"github.com/aquasecurity/go-version/pkg/version"
 	"github.com/goccy/go-yaml"
 	"github.com/k1LoW/errors"
@@ -14,25 +15,24 @@ import (
 	"github.com/k1LoW/tbls/dict"
 	"github.com/k1LoW/tbls/schema"
 	ver "github.com/k1LoW/tbls/version"
-	"github.com/minio/pkg/wildcard"
 	"github.com/samber/lo"
 )
 
 const DefaultDocPath = "dbdoc"
 
-var DefaultConfigFilePaths = []string{".tbls.yml", "tbls.yml"}
+var DefaultConfigFilePaths = []string{".tbls.yml", "tbls.yml", ".tbls.yaml", "tbls.yaml"}
 
-// DefaultERFormat is the default ER diagram format
+// DefaultERFormat is the default ER diagram format.
 const DefaultERFormat = "svg"
 
 var SupportERFormat = []string{"png", "jpg", "svg", "mermaid"}
 
 const SchemaFileName = "schema.json"
 
-// DefaultERDistance is the default distance between tables that display relations in the ER
+// DefaultERDistance is the default distance between tables that display relations in the ER.
 var DefaultERDistance = 1
 
-// Config is tbls config
+// Config is tbls config.
 type Config struct {
 	Name   string   `yaml:"name"`
 	Desc   string   `yaml:"desc,omitempty"`
@@ -53,7 +53,7 @@ type Config struct {
 	Dict                   dict.Dict              `yaml:"dict,omitempty"`
 	Templates              Templates              `yaml:"templates,omitempty"`
 	DetectVirtualRelations DetectVirtualRelations `yaml:"detectVirtualRelations,omitempty"`
-	BaseUrl                string                 `yaml:"baseUrl,omitempty"`
+	BaseURL                string                 `yaml:"baseUrl,omitempty"`
 	RequiredVersion        string                 `yaml:"requiredVersion,omitempty"`
 	DisableOutputSchema    bool                   `yaml:"disableOutputSchema,omitempty"`
 	MergedDict             dict.Dict              `yaml:"-"`
@@ -71,7 +71,7 @@ type DSN struct {
 	Headers map[string]string `yaml:"headers,omitempty"`
 }
 
-// Format is document format setting
+// Format is document format setting.
 type Format struct {
 	Adjust                   bool     `yaml:"adjust,omitempty"`
 	Sort                     bool     `yaml:"sort,omitempty"`
@@ -80,7 +80,7 @@ type Format struct {
 	HideColumnsWithoutValues []string `yaml:"hideColumnsWithoutValues,omitempty"`
 }
 
-// ER is er setting
+// ER is er setting.
 type ER struct {
 	Skip            bool             `yaml:"skip,omitempty"`
 	Format          string           `yaml:"format,omitempty"`
@@ -91,13 +91,13 @@ type ER struct {
 	Font            string           `yaml:"font,omitempty"`
 }
 
-// ShowColumnTypes is show column setting for ER diagram
+// ShowColumnTypes is show column setting for ER diagram.
 type ShowColumnTypes struct {
 	Related bool `yaml:"related,omitempty"`
 	Primary bool `yaml:"primary,omitempty"`
 }
 
-// AdditionalRelation is the struct for table relation from yaml
+// AdditionalRelation is the struct for table relation from yaml.
 type AdditionalRelation struct {
 	Table             string   `yaml:"table"`
 	Columns           []string `yaml:"columns"`
@@ -109,7 +109,7 @@ type AdditionalRelation struct {
 	Override          bool     `yaml:"override,omitempty"`
 }
 
-// AdditionalComment is the struct for table relation from yaml
+// AdditionalComment is the struct for table relation from yaml.
 type AdditionalComment struct {
 	Table              string              `yaml:"table"`
 	TableComment       string              `yaml:"tableComment,omitempty"`
@@ -126,10 +126,10 @@ type DetectVirtualRelations struct {
 	Strategy string `yaml:"strategy,omitempty"`
 }
 
-// Option function change Config
+// Option function change Config.
 type Option func(*Config) error
 
-// DSNURL return Option set Config.DSN.URL
+// DSNURL return Option set Config.DSN.URL.
 func DSNURL(dsn string) Option {
 	return func(c *Config) error {
 		c.DSN.URL = dsn
@@ -137,7 +137,7 @@ func DSNURL(dsn string) Option {
 	}
 }
 
-// DocPath return Option set Config.DocPath
+// DocPath return Option set Config.DocPath.
 func DocPath(docPath string) Option {
 	return func(c *Config) error {
 		c.DocPath = docPath
@@ -145,7 +145,7 @@ func DocPath(docPath string) Option {
 	}
 }
 
-// Adjust return Option set Config.Format.Adjust
+// Adjust return Option set Config.Format.Adjust.
 func Adjust(adjust bool) Option {
 	return func(c *Config) error {
 		if adjust {
@@ -155,7 +155,7 @@ func Adjust(adjust bool) Option {
 	}
 }
 
-// Sort return Option set Config.Format.Sort
+// Sort return Option set Config.Format.Sort.
 func Sort(sort bool) Option {
 	return func(c *Config) error {
 		if sort {
@@ -165,7 +165,7 @@ func Sort(sort bool) Option {
 	}
 }
 
-// ERSkip return Option set Config.ER.Skip
+// ERSkip return Option set Config.ER.Skip.
 func ERSkip(skip bool) Option {
 	return func(c *Config) error {
 		c.ER.Skip = skip
@@ -173,7 +173,7 @@ func ERSkip(skip bool) Option {
 	}
 }
 
-// ERFormat return Option set Config.ER.Format
+// ERFormat return Option set Config.ER.Format.
 func ERFormat(erFormat string) Option {
 	return func(c *Config) error {
 		if erFormat != "" {
@@ -183,7 +183,7 @@ func ERFormat(erFormat string) Option {
 	}
 }
 
-// Distance return Option set Config.Distance
+// Distance return Option set Config.Distance.
 func Distance(distance int) Option {
 	return func(c *Config) error {
 		c.Distance = distance
@@ -191,17 +191,17 @@ func Distance(distance int) Option {
 	}
 }
 
-// BaseUrl return Option set Config.BaseUrl
-func BaseUrl(baseUrl string) Option {
+// BaseURL return Option set Config.BaseURL.
+func BaseURL(baseURL string) Option {
 	return func(c *Config) error {
-		if baseUrl != "" {
-			c.BaseUrl = baseUrl
+		if baseURL != "" {
+			c.BaseURL = baseURL
 		}
 		return nil
 	}
 }
 
-// Include return Option set Config.Include
+// Include return Option set Config.Include.
 func Include(i []string) Option {
 	return func(c *Config) error {
 		if len(i) > 0 {
@@ -211,7 +211,7 @@ func Include(i []string) Option {
 	}
 }
 
-// Exclude return Option set Config.Exclude
+// Exclude return Option set Config.Exclude.
 func Exclude(e []string) Option {
 	return func(c *Config) error {
 		if len(e) > 0 {
@@ -221,7 +221,7 @@ func Exclude(e []string) Option {
 	}
 }
 
-// IncludeLabels return Option set Config.includeLabels
+// IncludeLabels return Option set Config.includeLabels.
 func IncludeLabels(l []string) Option {
 	return func(c *Config) error {
 		if len(l) > 0 {
@@ -231,7 +231,7 @@ func IncludeLabels(l []string) Option {
 	}
 }
 
-// New return Config
+// New return Config.
 func New() (*Config, error) {
 	c := Config{}
 	err := c.setDefault()
@@ -241,7 +241,7 @@ func New() (*Config, error) {
 	return &c, nil
 }
 
-// Load config with all method
+// Load config with all method.
 func (c *Config) Load(configPath string, options ...Option) error {
 	if err := c.LoadConfigFile(configPath); err != nil {
 		return err
@@ -266,7 +266,7 @@ func (c *Config) Load(configPath string, options ...Option) error {
 	return nil
 }
 
-// LoadOptions load options
+// LoadOptions load options.
 func (c *Config) LoadOption(options ...Option) error {
 	for _, option := range options {
 		if err := option(c); err != nil {
@@ -276,7 +276,7 @@ func (c *Config) LoadOption(options ...Option) error {
 	return nil
 }
 
-// set default setting
+// set default setting.
 func (c *Config) setDefault() error {
 	if c.DocPath == "" {
 		c.DocPath = DefaultDocPath
@@ -322,6 +322,8 @@ func (c *Config) validate() error {
 	if !lo.Contains(SupportERFormat, c.ER.Format) {
 		return fmt.Errorf("unsupported ER format: %s", c.ER.Format)
 	}
+	seenViewpointIDs := map[string]int{}
+	seenViewpointNames := map[string]int{}
 	for i, v := range c.Viewpoints {
 		if v.Name == "" {
 			return fmt.Errorf("viewpoints[%d] name is required", i)
@@ -329,6 +331,25 @@ func (c *Config) validate() error {
 		if v.Desc == "" {
 			return fmt.Errorf("viewpoints[%d] description is required", i)
 		}
+		if v.ID != "" {
+			// id is embedded into output file paths (e.g. viewpoint-<id>.md), so path
+			// separators would allow writing outside the intended output directory.
+			if strings.ContainsAny(v.ID, `/\`) {
+				return fmt.Errorf("viewpoints[%d] id '%s' must not contain path separators ('/' or '\\')", i, v.ID)
+			}
+			if j, ok := seenViewpointIDs[v.ID]; ok {
+				return fmt.Errorf("viewpoints[%d] id '%s' is duplicated with viewpoints[%d]", i, v.ID, j)
+			}
+			seenViewpointIDs[v.ID] = i
+		}
+		// An id-based name and an index-based name can collide (e.g. viewpoints[0] without id
+		// produces viewpoint-0, and viewpoints[1] with id "0" produces viewpoint-0 too), which
+		// would silently overwrite output files. Reject such conflicts on the derived name.
+		name := schema.ViewpointName(v.ID, i)
+		if j, ok := seenViewpointNames[name]; ok {
+			return fmt.Errorf("viewpoints[%d] output name '%s' conflicts with viewpoints[%d]", i, name, j)
+		}
+		seenViewpointNames[name] = i
 		for j, g := range v.Groups {
 			if g.Name == "" {
 				return fmt.Errorf("viewpoints[%d].groups[%d] name is required", i, j)
@@ -342,7 +363,7 @@ func (c *Config) validate() error {
 	return nil
 }
 
-// LoadEnviron load environment variables
+// LoadEnviron load environment variables.
 func (c *Config) LoadEnviron() error {
 	dsn := os.Getenv("TBLS_DSN")
 	if dsn != "" {
@@ -355,21 +376,27 @@ func (c *Config) LoadEnviron() error {
 	return nil
 }
 
-// LoadConfigFile load config file
+// LoadConfigFile load config file.
 func (c *Config) LoadConfigFile(path string) (err error) {
 	defer func() {
 		err = errors.WithStack(err)
 	}()
 	if path == "" && os.Getenv("TBLS_DSN") == "" {
+		var paths []string
 		for _, p := range DefaultConfigFilePaths {
 			if f, err := os.Stat(filepath.Join(c.root, p)); err == nil && !f.IsDir() {
-				if path != "" {
-					return fmt.Errorf("duplicate config file [%s, %s]", path, p)
-				}
-				path = p
+				paths = append(paths, p)
 			}
 		}
+		if len(paths) == 0 {
+			return nil
+		}
+		if len(paths) > 1 {
+			return fmt.Errorf("duplicate config file [%s]", strings.Join(paths, ", "))
+		}
+		path = paths[0]
 	}
+
 	if path == "" {
 		return nil
 	}
@@ -388,7 +415,7 @@ func (c *Config) LoadConfigFile(path string) (err error) {
 	return c.LoadConfig(buf)
 }
 
-// LoadConfig load config from []byte
+// LoadConfig load config from []byte.
 func (c *Config) LoadConfig(in []byte) (err error) {
 	defer func() {
 		err = errors.WithStack(err)
@@ -400,7 +427,7 @@ func (c *Config) LoadConfig(in []byte) (err error) {
 	return nil
 }
 
-// ModifySchema modify schema.Schema by config
+// ModifySchema modify schema.Schema by config.
 func (c *Config) ModifySchema(s *schema.Schema) error {
 	if c.Name != "" {
 		s.Name = c.Name
@@ -455,12 +482,15 @@ func (c *Config) ModifySchema(s *schema.Schema) error {
 		}); err != nil {
 			return err
 		}
+		if err := c.detectShowColumnsForER(cs); err != nil {
+			return err
+		}
 		groups := []*schema.ViewpointGroup{}
 		tables := lo.Map(cs.Tables, func(t *schema.Table, _ int) string {
 			return t.Name
 		})
 		for _, g := range v.Groups {
-			gt, _, err := cs.SepareteTablesThatAreIncludedOrNot(&schema.FilterOption{
+			gt, _, err := cs.SeparateTablesThatAreIncludedOrNot(&schema.FilterOption{
 				Include:       g.Tables,
 				IncludeLabels: g.Labels,
 			})
@@ -483,6 +513,7 @@ func (c *Config) ModifySchema(s *schema.Schema) error {
 			tables = left
 		}
 		s.Viewpoints = s.Viewpoints.Merge(&schema.Viewpoint{
+			ID:       v.ID,
 			Name:     v.Name,
 			Desc:     v.Desc,
 			Labels:   v.Labels,
@@ -512,23 +543,25 @@ func (c *Config) ModifySchema(s *schema.Schema) error {
 		// Add viewpoints to table
 
 		for _, t := range v.Tables {
-			println(v.Name, t)
-			table, err := s.FindTableByName(t)
+			ts, err := s.MatchTablesByName(t)
 			if err != nil {
 				return err
 			}
-			table.Viewpoints = append(table.Viewpoints, &schema.TableViewpoint{
-				Index: vi,
-				Name:  v.Name,
-				Desc:  v.Desc,
-			})
+			for _, tt := range ts {
+				tt.Viewpoints = append(tt.Viewpoints, &schema.TableViewpoint{
+					Index: vi,
+					ID:    v.ID,
+					Name:  v.Name,
+					Desc:  v.Desc,
+				})
+			}
 		}
 	}
 
 	return nil
 }
 
-// MergeAdditionalData merge relations: comments: to schema.Schema
+// MergeAdditionalData merge relations: comments: to schema.Schema.
 func (c *Config) MergeAdditionalData(s *schema.Schema) error {
 	if err := mergeAdditionalRelations(s, c.Relations); err != nil {
 		return err
@@ -539,7 +572,7 @@ func (c *Config) MergeAdditionalData(s *schema.Schema) error {
 	return nil
 }
 
-// FilterTables filter tables from schema.Schema using include: and exclude: and includeLabels
+// FilterTables filter tables from schema.Schema using include: and exclude: and includeLabels.
 func (c *Config) FilterTables(s *schema.Schema) error {
 	return s.Filter(&schema.FilterOption{
 		Include:       c.Include,
@@ -555,7 +588,7 @@ func (c *Config) mergeDictFromSchema(s *schema.Schema) {
 	}
 }
 
-// MaskedDSN return DSN mask password
+// MaskedDSN return DSN mask password.
 func (c *Config) MaskedDSN() (string, error) {
 	u, err := url.Parse(c.DSN.URL)
 	if err != nil {
@@ -595,7 +628,7 @@ func (c *Config) detectShowColumnsForER(s *schema.Schema) error {
 
 	for _, t := range s.Tables {
 		for _, cc := range t.Columns {
-			if c.ER.ShowColumnTypes.Related && (cc.ChildRelations != nil || cc.ParentRelations != nil) {
+			if c.ER.ShowColumnTypes.Related && (len(cc.ChildRelations) > 0 || len(cc.ParentRelations) > 0) {
 				// related
 				cc.HideForER = false
 			} else if c.ER.ShowColumnTypes.Primary && cc.PK {
@@ -791,15 +824,14 @@ func mergeDetectedRelations(s *schema.Schema, strategy *NamingStrategy) {
 
 func matchLength(s []string, e string) (int, bool) {
 	for _, v := range s {
-		if wildcard.MatchSimple(v, e) {
+		if wildcard.Match(v, e) {
 			return len(strings.ReplaceAll(v, "*", "")), true
 		}
 	}
 	return 0, false
 }
 
-// detectCardinality detects the cardinality of the relations
-// This function should be applied to the completed schema
+// This function should be applied to the completed schema.
 func detectCardinality(s *schema.Schema) error {
 	for _, r := range s.Relations {
 		// child
