@@ -1032,9 +1032,9 @@ func extractLogicalName(comment string) LogicalNameResult {
 	}
 	// マッチした部分をコメントから削除
 	updatedComment := re.ReplaceAllString(comment, "")
-	// コメント先頭のコロン、改行、スペース（全角/半角）を取り除く
+	// コメント先頭のコロン（全角/半角）、改行、タブ、スペース（全角/半角）を取り除く
 	updatedComment = strings.TrimLeftFunc(updatedComment, func(r rune) bool {
-		return r == ':' || r == '\n' || r == '\r' || r == ' ' || r == '　' || r == '：'
+		return r == ':' || r == '\n' || r == '\r' || r == '\t' || r == ' ' || r == '　' || r == '：'
 	})
 	return LogicalNameResult{
 		LogicalName:    logicalName,
