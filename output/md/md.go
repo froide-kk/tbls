@@ -729,9 +729,14 @@ func (m *Md) makeTableTemplateData(t *schema.Table) map[string]interface{} {
 		referencedTables = m.addNumberToTable(referencedTables)
 	}
 
+	// テーブルコメントも「論理名: 説明」形式で記述されるため分割して渡す
+	tableLogicalName := extractLogicalName(t.Comment)
+
 	if adjust {
 		return map[string]interface{}{
 			"Table":            t,
+			"LogicalName":      tableLogicalName.LogicalName,
+			"Description":      tableLogicalName.UpdatedComment,
 			"Columns":          adjustTable(columnsData),
 			"Viewpoints":       adjustTable(viewpointsData),
 			"Constraints":      adjustTable(constraintsData),
@@ -743,6 +748,8 @@ func (m *Md) makeTableTemplateData(t *schema.Table) map[string]interface{} {
 
 	return map[string]interface{}{
 		"Table":            t,
+		"LogicalName":      tableLogicalName.LogicalName,
+		"Description":      tableLogicalName.UpdatedComment,
 		"Columns":          columnsData,
 		"Viewpoints":       viewpointsData,
 		"Constraints":      constraintsData,
