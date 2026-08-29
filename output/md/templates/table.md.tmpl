@@ -1,11 +1,15 @@
 # {{ .Table.Name }}
+{{- if ne .LogicalName "" }}
 
-{{- if or (ne .Table.Comment "") .Table.Def }}
+{{ .LogicalName }}
+{{- end }}
+
+{{- if or (ne .Description "") .Table.Def }}
+{{- if ne .Description "" }}
 
 ## {{ "Description" | lookup }}
-{{- if ne .Table.Comment "" }}
 
-{{ .Table.Comment | nl2mdnl }}
+{{ .Description | nl2mdnl }}
 {{- end }}
 {{- if .Table.Def }}
 

@@ -6,9 +6,9 @@ select label blue
 
 ## Tables
 
-| Name | Columns | Comment | Type | Labels |
-| ---- | ------- | ------- | ---- | ------ |
-| [a](a.md) | 2 | table a |  | `blue` `green` |
+| Name | LogicalName | Columns | Comment | Type | Labels |
+| ---- | ------- | ------- | ------- | ---- | ------ |
+| [a](a.md) | table | 2 | a |  | `blue` `green` |
 
 ## Relations
 

@@ -14,10 +14,10 @@ THIS IS TABLE A
 
 ## Columns
 
-| Name | Type | Default | Nullable | Children | Parents | Comment |
-| ---- | ---- | ------- | -------- | -------- | ------- | ------- |
-| a | INTEGER |  | false | [b](b.md) |  | COLUMN A |
-| a2 | TEXT |  | false |  |  | column `a2` |
+| Name | LogicalName | Type | Default | Nullable | Children | Parents | Comment |
+| ---- | ----------- | ---- | ------- | -------- | -------- | ------- | ------- |
+| a | COLUMN | INTEGER |  | false | [b](b.md) |  | A |
+| a2 | column | TEXT |  | false |  |  | `a2` |
 
 ## Viewpoints
 

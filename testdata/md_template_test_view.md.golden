@@ -17,16 +17,16 @@ CREATE VIEW view AS SELECT a, b FROM a JOIN b ON a.a = b.b
 
 ## Columns
 
-| Name | Type | Default | Nullable | Children | Parents | Comment |
-| ---- | ---- | ------- | -------- | -------- | ------- | ------- |
-| view_column | INTEGER |  | false |  |  | column of view |
+| Name | LogicalName | Type | Default | Nullable | Children | Parents | Comment |
+| ---- | ----------- | ---- | ------- | -------- | -------- | ------- | ------- |
+| view_column | column | INTEGER |  | false |  |  | of view |
 
 ## Referenced Tables
 
-| Name | Columns | Comment | Type | Labels |
-| ---- | ------- | ------- | ---- | ------ |
-| [a](a.md) | 2 | TABLE A<br /><br />THIS IS TABLE A |  | `blue` `green` |
-| [b](b.md) | 2 | table b |  | `red` `green` |
+| Name | LogicalName | Columns | Comment | Type | Labels |
+| ---- | ------- | ------- | ------- | ---- | ------ |
+| [a](a.md) | TABLE | 2 | A<br /><br />THIS IS TABLE A |  | `blue` `green` |
+| [b](b.md) | table | 2 | b |  | `red` `green` |
 
 ---
 
